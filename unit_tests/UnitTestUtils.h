@@ -342,17 +342,17 @@ protected:
       &meta->declare_field<double>(meta->side_rank(), "exposed_area_vector");
     dudx_ = &meta->declare_field<double>(stk::topology::NODE_RANK, "dudx");
 
-    const double zeroVecThree[3] = {0.0, 0.0, 0.0};
+    // FIX: Pass nullptr instead of stack-local pointers
     stk::mesh::put_field_on_mesh(
-      *testField, meta->universal_part(), 3, zeroVecThree);
+      *testField, meta->universal_part(), 3, nullptr);
     stk::io::set_field_output_type(
       *testField, stk::io::FieldOutputType::VECTOR_3D);
     stk::mesh::put_field_on_mesh(
-      *curCoords_, meta->universal_part(), 3, zeroVecThree);
+      *curCoords_, meta->universal_part(), 3, nullptr);
     stk::io::set_field_output_type(
       *curCoords_, stk::io::FieldOutputType::VECTOR_3D);
     stk::mesh::put_field_on_mesh(
-      *meshDisp_, meta->universal_part(), 3, zeroVecThree);
+      *meshDisp_, meta->universal_part(), 3, nullptr);
     stk::io::set_field_output_type(
       *meshDisp_, stk::io::FieldOutputType::VECTOR_3D);
 
@@ -375,21 +375,17 @@ protected:
       *mesh_velocity_ref_, stk::io::FieldOutputType::VECTOR_3D);
     stk::mesh::put_field_on_mesh(
       *div_mesh_velocity_, meta->universal_part(), nullptr);
-    constexpr double one = 1.0;
-    stk::mesh::put_field_on_mesh(*density_, meta->universal_part(), &one);
-    stk::mesh::put_field_on_mesh(*pressure_, meta->universal_part(), &one);
-    stk::mesh::put_field_on_mesh(*viscosity_, meta->universal_part(), &one);
+    stk::mesh::put_field_on_mesh(*density_, meta->universal_part(), nullptr);
+    stk::mesh::put_field_on_mesh(*pressure_, meta->universal_part(), nullptr);
+    stk::mesh::put_field_on_mesh(*viscosity_, meta->universal_part(), nullptr);
     const sierra::kynema_ugf::MasterElement* meFC =
       sierra::kynema_ugf::MasterElementRepo::get_surface_master_element_on_host(
         stk::topology::QUAD_4);
-    const double oneVecTwelve[12] = {one, one, one, one, one, one,
-                                     one, one, one, one, one, one};
-    const double oneVecNine[9] = {one, one, one, one, one, one, one, one, one};
     stk::mesh::put_field_on_mesh(
       *exposedAreaVec_, meta->universal_part(),
-      3 * meFC->num_integration_points(), oneVecTwelve);
+      3 * meFC->num_integration_points(), nullptr);
     stk::mesh::put_field_on_mesh(
-      *dudx_, meta->universal_part(), 3 * 3, oneVecNine);
+      *dudx_, meta->universal_part(), 3 * 3, nullptr);
 
     meta->enable_late_fields();
   }
@@ -420,6 +416,26 @@ protected:
     }
 
     fill_mesh(meshSpec);
+    
+    // FIX: Initialize fields AFTER mesh is populated
+    stk::mesh::field_fill(0.0, *testField);
+    stk::mesh::field_fill(0.0, *curCoords_);
+    stk::mesh::field_fill(0.0, *meshDisp_);
+    stk::mesh::field_fill(0.0, *deflectionRamp_);
+    stk::mesh::field_fill(0, *dispMap_);
+    stk::mesh::field_fill(0.0, *dispMapInterp_);
+    stk::mesh::field_fill(0, *loadMap_);
+    stk::mesh::field_fill(0.0, *loadMapInterp_);
+    stk::mesh::field_fill(0.0, *tforceSCS_);
+    stk::mesh::field_fill(0.0, *mesh_displacement_ref_);
+    stk::mesh::field_fill(0.0, *mesh_velocity_ref_);
+    stk::mesh::field_fill(0.0, *div_mesh_velocity_);
+    stk::mesh::field_fill(1.0, *density_);
+    stk::mesh::field_fill(1.0, *pressure_);
+    stk::mesh::field_fill(1.0, *viscosity_);
+    stk::mesh::field_fill(1.0, *exposedAreaVec_);
+    stk::mesh::field_fill(1.0, *dudx_);
+    
     coordField = static_cast<const sierra::kynema_ugf::VectorFieldType*>(
       meta->coordinate_field());
     EXPECT_TRUE(coordField != nullptr);
