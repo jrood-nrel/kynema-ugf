@@ -94,20 +94,19 @@ protected:
     fieldManager =
       std::make_shared<sierra::kynema_ugf::FieldManager>(*meta, numStates);
 
-    double one = 1.0;
-    double zero = 0.0;
-    double zeroVec[3] = {0.0, 0.0, 0.0};
+    // FIX: Pass nullptr instead of initial value pointers to avoid
+    // triggering Kokkos bug in FieldBase::set_initial_value -> resize
     const stk::mesh::PartVector parts(1, &meta->universal_part());
     elemCentroidField =
-      fieldManager->register_field<double>("elemCentroid", parts, zeroVec);
+      fieldManager->register_field<double>("elemCentroid", parts, nullptr);
     nodalPressureField =
-      fieldManager->register_field<double>("nodalPressure", parts, &one);
+      fieldManager->register_field<double>("nodalPressure", parts, nullptr);
     discreteLaplacianOfPressure =
-      fieldManager->register_field<double>("discreteLaplacian", parts, &zero);
-    scalarQ = fieldManager->register_field<double>("scalarQ", parts, &zero);
+      fieldManager->register_field<double>("discreteLaplacian", parts, nullptr);
+    scalarQ = fieldManager->register_field<double>("scalarQ", parts, nullptr);
     diffFluxCoeff =
-      fieldManager->register_field<double>("diffFluxCoeff", parts, &zero);
-    idField = fieldManager->register_field<double>("idField", parts, &zero);
+      fieldManager->register_field<double>("diffFluxCoeff", parts, nullptr);
+    idField = fieldManager->register_field<double>("idField", parts, nullptr);
   }
 
   ~Hex8Mesh() {}
@@ -133,6 +132,13 @@ protected:
       meta->coordinate_field());
     EXPECT_TRUE(coordField != nullptr);
 
+    // FIX: Initialize fields AFTER mesh is populated, not during registration
+    stk::mesh::field_fill(0.0, *elemCentroidField);
+    stk::mesh::field_fill(0.0, *discreteLaplacianOfPressure);
+    stk::mesh::field_fill(0.0, *scalarQ);
+    stk::mesh::field_fill(0.0, *diffFluxCoeff);
+    stk::mesh::field_fill(0.0, *idField);
+    
     exactLaplacian = unit_test_utils::initialize_quadratic_scalar_field(
       *bulk, *coordField, *nodalPressureField);
     stk::mesh::field_fill(0.0, *discreteLaplacianOfPressure);
