@@ -100,6 +100,8 @@ SDRWallFuncAlgDriver::post_work()
       sdr.get(mi, 0) = sdrVal;
     });
 
+  wallArea.clear_sync_state();
+  bcsdr.clear_sync_state();
   wallArea.modify_on_device();
   bcsdr.modify_on_device();
   sdrWallBC.modify_on_device();
