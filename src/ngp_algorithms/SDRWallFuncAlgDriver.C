@@ -57,6 +57,8 @@ SDRWallFuncAlgDriver::post_work()
     realm_.mesh_info(), "specific_dissipation_rate");
   auto& sdrWallBC = kynema_ugf_ngp::get_ngp_field(realm_.mesh_info(), "sdr_bc");
 
+  bcsdr.clear_sync_state();
+  wallArea.clear_sync_state();
   bcsdr.modify_on_device();
   wallArea.modify_on_device();
 
