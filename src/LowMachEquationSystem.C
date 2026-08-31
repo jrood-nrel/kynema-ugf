@@ -127,6 +127,7 @@
 #include "ngp_utils/NgpFieldBLAS.h"
 #include "ngp_utils/NgpFieldUtils.h"
 #include "stk_mesh/base/NgpFieldParallel.hpp"
+#include "stk_util/ngp/NgpSpaces.hpp"
 #include "ngp_utils/NgpTypes.h"
 
 // UT Austin Hybrid AMS kernels
@@ -2772,10 +2773,8 @@ MomentumEquationSystem::assemble_and_solve(stk::mesh::FieldBase* deltaSolution)
       realm_.solutionOptions_->get_relaxation_factor(dofName);
 
     // Sum up contributions on the nodes shared amongst processors
-    const std::vector<NGPDoubleFieldType*> fVecNgp{&ngpUdiag};
-    bool doFinalSyncBackToDevice = true;
-    stk::mesh::parallel_sum(
-      realm_.bulk_data(), fVecNgp, doFinalSyncBackToDevice);
+    const std::vector<const stk::mesh::FieldBase*> fVecNgp{Udiag_};
+    stk::mesh::parallel_sum<stk::ngp::DeviceSpace>(realm_.bulk_data(), fVecNgp);
 
     const auto sel = stk::mesh::selectField(*Udiag_) &
                      meta.locally_owned_part() &
