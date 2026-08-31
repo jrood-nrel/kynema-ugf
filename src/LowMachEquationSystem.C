@@ -2467,6 +2467,8 @@ MomentumEquationSystem::initialize()
     stk::mesh::field_fill(gamma1 / dt, *Udiag_);
 
     Udiag_->modify_on_host();
+    if (extractDiagonal_)
+      Udiag_->sync_to_device();
   }
 }
 
