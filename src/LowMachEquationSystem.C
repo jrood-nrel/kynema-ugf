@@ -2774,8 +2774,7 @@ MomentumEquationSystem::assemble_and_solve(stk::mesh::FieldBase* deltaSolution)
 
     // Sum up contributions on the nodes shared amongst processors
     const std::vector<const stk::mesh::FieldBase*> fVecNgp{Udiag_};
-    stk::mesh::parallel_sum<stk::ngp::DeviceSpace>(
-      realm_.bulk_data(), fVecNgp);
+    stk::mesh::parallel_sum<stk::ngp::DeviceSpace>(realm_.bulk_data(), fVecNgp);
 
     const auto sel = stk::mesh::selectField(*Udiag_) &
                      meta.locally_owned_part() &
