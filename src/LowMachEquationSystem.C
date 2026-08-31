@@ -2745,6 +2745,7 @@ MomentumEquationSystem::assemble_and_solve(stk::mesh::FieldBase* deltaSolution)
     Udiag_->mesh_meta_data_ordinal());
   // Reset timescale field before momentum solve
   {
+    Udiag_->sync_to_device();
     double projTimeScale = 0.0;
     if (realm_.solutionOptions_->tscaleType_ == TSCALE_DEFAULT) {
       const double dt = realm_.get_time_step();
