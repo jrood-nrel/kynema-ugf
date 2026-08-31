@@ -244,7 +244,7 @@ GeometryAlgDriver::post_work()
   std::vector<const stk::mesh::FieldBase*> fieldBases;
   fieldBases.reserve(fields.size());
   for (auto* f : fields)
-    fieldBases.push_back(meta.get_fields()[f->get_field_ordinal()]);
+    fieldBases.push_back(meta.get_fields()[f->mesh_meta_data_ordinal()]);
   stk::mesh::parallel_sum<stk::ngp::HostSpace>(realm_.bulk_data(), fieldBases);
 
   if (realm_.hasPeriodic_) {
