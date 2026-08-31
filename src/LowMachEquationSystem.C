@@ -2758,6 +2758,7 @@ MomentumEquationSystem::assemble_and_solve(stk::mesh::FieldBase* deltaSolution)
 
   // Perform actual solve
   EquationSystem::assemble_and_solve(deltaSolution);
+  ngpUdiag.sync_to_device();
 
   // Post-process the Udiag term
   ScalarFieldType* dualVol =
