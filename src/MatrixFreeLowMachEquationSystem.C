@@ -45,6 +45,8 @@
 #include "stk_mesh/base/Ngp.hpp"
 #include "stk_mesh/base/NgpField.hpp"
 #include "stk_mesh/base/NgpFieldParallel.hpp"
+#include "stk_mesh/base/FieldParallel.hpp"
+#include "stk_util/ngp/NgpSpaces.hpp"
 #include "stk_mesh/base/NgpProfilingBlock.hpp"
 #include "stk_mesh/base/Part.hpp"
 #include "stk_mesh/base/Types.hpp"
@@ -276,7 +278,9 @@ MatrixFreeLowMachEquationSystem::compute_filter_scale() const
       realm_.polynomial_order(), realm_.ngp_mesh(), interior_selector_, coords,
       dnv);
 
-    stk::mesh::parallel_sum<double>(realm_.bulk_data(), {&dnv}, false);
+    stk::mesh::parallel_sum<stk::ngp::HostSpace>(
+      realm_.bulk_data(),
+      {meta_.get_field(stk::topology::NODE_RANK, names::scaled_filter_length)});
     if (realm_.hasPeriodic_) {
       realm_.periodic_field_update(
         meta_.get_field(stk::topology::NODE_RANK, names::scaled_filter_length),
