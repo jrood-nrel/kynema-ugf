@@ -241,24 +241,11 @@ GeometryAlgDriver::post_work()
   }
 
   const auto& meta = realm_.meta_data();
+  const auto& metaFields = meta.get_fields();
   std::vector<const stk::mesh::FieldBase*> fieldBases;
-  fieldBases.push_back(
-    meta.get_field(stk::topology::NODE_RANK, "dual_nodal_volume"));
-  if (realm_.realmUsesEdges_) {
-    fieldBases.push_back(
-      meta.get_field(stk::topology::EDGE_RANK, "edge_area_vector"));
-    if (realm_.has_mesh_deformation()) {
-      fieldBases.push_back(
-        meta.get_field(entityRank, "edge_face_velocity_mag"));
-      fieldBases.push_back(
-        meta.get_field(entityRank, "edge_swept_face_volume"));
-    }
-  }
-  if (hasWallFunc_) {
-    fieldBases.push_back(
-      meta.get_field(stk::topology::NODE_RANK, "assembled_wall_area_wf"));
-    fieldBases.push_back(meta.get_field(
-      stk::topology::NODE_RANK, "assembled_wall_normal_distance"));
+  fieldBases.reserve(fields.size());
+  for (const auto* field : fields) {
+    fieldBases.push_back(metaFields[field->get_ordinal()]);
   }
   stk::mesh::parallel_sum<stk::ngp::HostSpace>(realm_.bulk_data(), fieldBases);
 
