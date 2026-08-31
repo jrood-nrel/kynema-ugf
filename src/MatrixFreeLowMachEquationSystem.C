@@ -296,6 +296,7 @@ MatrixFreeLowMachEquationSystem::compute_filter_scale() const
   {
     stk::mesh::ProfilingBlock pf("compute filter scale from dnv");
     auto filter_scale = get_node_field(meta_, names::scaled_filter_length);
+    filter_scale.sync_to_device();
 
     double scaling = 0;
     switch (realm_.get_turbulence_model()) {
