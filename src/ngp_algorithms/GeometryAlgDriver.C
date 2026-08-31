@@ -21,6 +21,7 @@
 #include "stk_mesh/base/FieldBLAS.hpp"
 #include "stk_mesh/base/MetaData.hpp"
 #include "stk_mesh/base/NgpFieldParallel.hpp"
+#include "stk_util/ngp/NgpSpaces.hpp"
 #include <stk_mesh/base/NgpMesh.hpp>
 
 namespace sierra {
@@ -239,8 +240,12 @@ GeometryAlgDriver::post_work()
     fld->sync_to_host();
   }
 
-  bool doFinalSyncToDevice = false;
-  stk::mesh::parallel_sum(realm_.bulk_data(), fields, doFinalSyncToDevice);
+  const auto& meta = realm_.meta_data();
+  std::vector<const stk::mesh::FieldBase*> fieldBases;
+  fieldBases.reserve(fields.size());
+  for (auto* f : fields)
+    fieldBases.push_back(meta.get_fields()[f->get_field_ordinal()]);
+  stk::mesh::parallel_sum<stk::ngp::HostSpace>(realm_.bulk_data(), fieldBases);
 
   if (realm_.hasPeriodic_) {
     const auto& meta = realm_.meta_data();
