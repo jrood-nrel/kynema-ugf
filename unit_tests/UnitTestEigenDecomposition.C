@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -274,6 +277,7 @@ TEST(TestEigen, testeigendecompandreconstruct2d_simd)
       A2d_rand_simd[1][1][j] = b22 * (j + 1);
     }
   }
+
   A2d_rand_simd[1][0] = A2d_rand_simd[0][1];
 
   sierra::kynema_ugf::EigenDecomposition::sym_diagonalize(
@@ -292,6 +296,88 @@ TEST(TestEigen, testeigendecompandreconstruct2d_simd)
           stk::simd::get_data(b_[i][j], is),
           stk::simd::get_data(A2d_rand_simd[i][j], is), tol);
       }
+    }
+  }
+}
+
+TEST(TestEigen, testGeneralEigenvaluesZeroMatrix)
+{
+  double A[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(std::isfinite(D[i][i]));
+    EXPECT_DOUBLE_EQ(D[i][i], 0.0);
+  }
+}
+
+TEST(TestEigen, testGeneralEigenvaluesIsotropicMatrix)
+{
+  constexpr double c = 2.75;
+  double A[3][3] = {{c, 0.0, 0.0}, {0.0, c, 0.0}, {0.0, 0.0, c}};
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(std::isfinite(D[i][i]));
+    EXPECT_NEAR(D[i][i], c, 1.0e-14);
+  }
+}
+
+TEST(TestEigen, testGeneralEigenvaluesNearDegenerateMatrix)
+{
+  const double eps = 1.0e-12;
+  double A[3][3] = {{1.0, eps, 0.0}, {eps, 1.0 + eps, 0.0}, {0.0, 0.0, 2.0}};
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  std::array<double, 3> lambda = {D[0][0], D[1][1], D[2][2]};
+  std::sort(lambda.begin(), lambda.end());
+
+  const double trace2 = A[0][0] + A[1][1];
+  const double det2 = A[0][0] * A[1][1] - A[0][1] * A[1][0];
+  const double disc2 = std::sqrt(trace2 * trace2 - 4.0 * det2);
+  std::array<double, 3> gold = {0.5 * (trace2 - disc2), 0.5 * (trace2 + disc2),
+                                2.0};
+  std::sort(gold.begin(), gold.end());
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(std::isfinite(lambda[i]));
+    EXPECT_NEAR(lambda[i], gold[i], 1.0e-12);
+  }
+}
+
+TEST(TestEigen, testGeneralEigenvaluesZeroAndIsotropicSimd)
+{
+  DoubleType A[3][3], Q[3][3], D[3][3];
+  for (unsigned is = 0; is < stk::simd::ndoubles; ++is) {
+    const bool zeroLane = (is % 2 == 0);
+    const double c = 3.25;
+    const double diagVal = zeroLane ? 0.0 : c;
+    A[0][0][is] = diagVal;
+    A[0][1][is] = 0.0;
+    A[0][2][is] = 0.0;
+    A[1][0][is] = 0.0;
+    A[1][1][is] = diagVal;
+    A[1][2][is] = 0.0;
+    A[2][0][is] = 0.0;
+    A[2][1][is] = 0.0;
+    A[2][2][is] = diagVal;
+  }
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (unsigned is = 0; is < stk::simd::ndoubles; ++is) {
+    const bool zeroLane = (is % 2 == 0);
+    const double expected = zeroLane ? 0.0 : 3.25;
+    for (int i = 0; i < 3; ++i) {
+      const double val = stk::simd::get_data(D[i][i], is);
+      EXPECT_TRUE(std::isfinite(val));
+      EXPECT_NEAR(val, expected, 1.0e-14);
     }
   }
 }
