@@ -389,3 +389,51 @@ TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_degenerate_inputs_finite)
     EXPECT_TRUE(std::isfinite(rhsHost(i)));
   }
 }
+
+TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_bkol_one_finite)
+{
+  if (bulk_->parallel_size() > 1)
+    return;
+
+  fill_mesh_and_init_fields();
+
+  solnOpts_.meshMotion_ = false;
+  solnOpts_.externalMeshDeformation_ = false;
+  solnOpts_.initialize_turbulence_constants();
+  solnOpts_.eastVector_ = {1.0, 0.0, 0.0};
+  solnOpts_.northVector_ = {0.0, 1.0, 0.0};
+
+  stk::mesh::field_fill(1.0, *visc_);
+  stk::mesh::field_fill(0.0, *tke_);
+  stk::mesh::field_fill(1.0, *sdr_);
+  visc_->modify_on_host();
+  tke_->modify_on_host();
+  sdr_->modify_on_host();
+  visc_->sync_to_device();
+  tke_->sync_to_device();
+  sdr_->sync_to_device();
+
+  unit_test_utils::NodeHelperObjects helperObjs(
+    bulk_, stk::topology::HEX_8, 3, partVec_[0]);
+
+  helperObjs.nodeAlg
+    ->add_kernel<sierra::kynema_ugf::MomentumSSTAMSForcingNodeKernel>(
+      *bulk_, solnOpts_);
+
+  sierra::kynema_ugf::TimeIntegrator timeIntegrator;
+  timeIntegrator.currentTime_ = 0.0;
+  timeIntegrator.timeStepN_ = 0.1;
+  timeIntegrator.timeStepNm1_ = 0.1;
+  timeIntegrator.gamma1_ = 1.0;
+  timeIntegrator.gamma2_ = -1.0;
+  timeIntegrator.gamma3_ = 0.0;
+  helperObjs.realm.timeIntegrator_ = &timeIntegrator;
+
+  helperObjs.execute();
+
+  auto rhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->rhs_);
+  for (unsigned i = 0; i < rhsHost.extent(0); ++i) {
+    EXPECT_TRUE(std::isfinite(rhsHost(i)));
+  }
+}
