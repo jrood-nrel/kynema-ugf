@@ -115,6 +115,8 @@ MomentumSSTAMSForcingNodeKernel::execute(
   NodeKernelTraits::RhsType& rhs,
   const stk::mesh::FastMeshIndex& node)
 {
+  constexpr NodeKernelTraits::DblType small = 1.0e-16;
+
   // Scratch work arrays
   NodeKernelTraits::DblType coords[NodeKernelTraits::NDimMax]; // coordinates
   NodeKernelTraits::DblType avgU[NodeKernelTraits::NDimMax]; // averageVelocity
@@ -126,10 +128,13 @@ MomentumSSTAMSForcingNodeKernel::execute(
   const NodeKernelTraits::DblType mu = viscosity_.get(node, 0);
   const NodeKernelTraits::DblType tvisc = tvisc_.get(node, 0);
   const NodeKernelTraits::DblType rho = density_.get(node, 0);
+  const NodeKernelTraits::DblType rhoSafe = stk::math::max(rho, small);
   const NodeKernelTraits::DblType tke =
     stk::math::max(tke_.get(node, 0), 1.0e-12);
   const NodeKernelTraits::DblType sdr = sdr_.get(node, 0);
+  const NodeKernelTraits::DblType sdrSafe = stk::math::max(sdr, small);
   const NodeKernelTraits::DblType beta = beta_.get(node, 0);
+  const NodeKernelTraits::DblType betaSafe = stk::math::max(beta, 0.0);
   const NodeKernelTraits::DblType wallDist = minDist_.get(node, 0);
   const NodeKernelTraits::DblType avgResAdeq = avgResAdeq_.get(node, 0);
 
@@ -139,24 +144,28 @@ MomentumSSTAMSForcingNodeKernel::execute(
     coords[d] = coordinates_.get(node, d);
   }
 
-  const NodeKernelTraits::DblType eps = betaStar_ * tke * sdr;
+  const NodeKernelTraits::DblType eps = betaStar_ * tke * sdrSafe;
+  const NodeKernelTraits::DblType epsSafe = stk::math::max(eps, small);
 
   const NodeKernelTraits::DblType smallCl_ = 2.0;
   const NodeKernelTraits::DblType clOffset_ = 0.2;
+  const NodeKernelTraits::DblType betaTkeSafe = stk::math::max(betaSafe * tke, 0.0);
 
   NodeKernelTraits::DblType length =
     (forceCl_ + (1.0 - stk::math::max(beta, 1.0 - clOffset_)) / clOffset_ *
                   (smallCl_ - forceCl_)) *
-    stk::math::pow(beta * tke, 1.5) / eps;
+    stk::math::pow(betaTkeSafe, 1.5) / epsSafe;
   length = stk::math::max(
     length,
-    Ceta_ * (stk::math::pow(mu / rho, 0.75) / stk::math::pow(eps, 0.25)));
+    Ceta_ *
+      (stk::math::pow(mu / rhoSafe, 0.75) / stk::math::pow(epsSafe, 0.25)));
 
   const NodeKernelTraits::DblType lengthY = stk::math::min(length, wallDist);
 
-  NodeKernelTraits::DblType T_beta = beta * tke / eps;
-  T_beta = stk::math::max(T_beta, Ct_ * stk::math::sqrt(mu / rho / eps));
+  NodeKernelTraits::DblType T_beta = beta * tke / epsSafe;
+  T_beta = stk::math::max(T_beta, Ct_ * stk::math::sqrt(mu / rhoSafe / epsSafe));
   T_beta = blT_ * T_beta;
+  const NodeKernelTraits::DblType T_betaSafe = stk::math::max(T_beta, small);
 
   // FIXME : Make this aware of wall direction, for now it is
   //         generalized using lengthY for all directions
@@ -173,10 +182,16 @@ MomentumSSTAMSForcingNodeKernel::execute(
     std::floor(periodicForcingLengthY_ / (clipLengthY + 1.e-12) + 0.5);
   const NodeKernelTraits::DblType ratioZ =
     std::floor(periodicForcingLengthZ_ / (clipLengthZ + 1.e-12) + 0.5);
+  const NodeKernelTraits::DblType ratioXSafe = stk::math::max(ratioX, 1.0);
+  const NodeKernelTraits::DblType ratioYSafe = stk::math::max(ratioY, 1.0);
+  const NodeKernelTraits::DblType ratioZSafe = stk::math::max(ratioZ, 1.0);
 
-  const NodeKernelTraits::DblType denomX = periodicForcingLengthX_ / ratioX;
-  const NodeKernelTraits::DblType denomY = periodicForcingLengthY_ / ratioY;
-  const NodeKernelTraits::DblType denomZ = periodicForcingLengthZ_ / ratioZ;
+  const NodeKernelTraits::DblType denomX =
+    stk::math::max(periodicForcingLengthX_ / ratioXSafe, small);
+  const NodeKernelTraits::DblType denomY =
+    stk::math::max(periodicForcingLengthY_ / ratioYSafe, small);
+  const NodeKernelTraits::DblType denomZ =
+    stk::math::max(periodicForcingLengthZ_ / ratioZSafe, small);
 
   const NodeKernelTraits::DblType ax = M_PI / denomX;
   const NodeKernelTraits::DblType ay = M_PI / denomY;
@@ -196,9 +211,10 @@ MomentumSSTAMSForcingNodeKernel::execute(
                                  stk::math::sin(yarg) * stk::math::cos(zarg);
 
   // Now we calculate the scaling of the initial field
-  const NodeKernelTraits::DblType v2 = tvisc * betaStar_ * sdr / (cMu_ * rho);
+  const NodeKernelTraits::DblType v2 = tvisc * betaStar_ * sdrSafe / (cMu_ * rhoSafe);
+  const NodeKernelTraits::DblType targetArg = stk::math::max(betaSafe * v2, 0.0);
   const NodeKernelTraits::DblType F_target =
-    forceFactor_ * stk::math::sqrt(beta * v2) / T_beta;
+    forceFactor_ * stk::math::sqrt(targetArg) / T_betaSafe;
 
   const NodeKernelTraits::DblType prod_r_temp =
     (F_target * dt_) * (hX * fluctU[0] + hY * fluctU[1] + hZ * fluctU[2]);
@@ -211,14 +227,16 @@ MomentumSSTAMSForcingNodeKernel::execute(
     stk::math::if_then_else(prod_r_abs >= 1.0e-15, prod_r_temp, 0.0);
 
   const NodeKernelTraits::DblType b_kol =
-    stk::math::min(blKol_ * stk::math::sqrt(mu * eps / rho) / tke, 1.0);
+    stk::math::min(
+      blKol_ * stk::math::sqrt(stk::math::max(mu * epsSafe / rhoSafe, 0.0)) / tke,
+      1.0);
 
   const NodeKernelTraits::DblType bhat = stk::math::if_then_else(
     (1.0 - b_kol) > 0.0, (1.0 - beta) / (1.0 - b_kol), 10000.0);
 
   NodeKernelTraits::DblType C_F_tmp =
-    -1.0 * stk::math::tanh(
-             1.0 - 1.0 / stk::math::sqrt(stk::math::min(avgResAdeq, 1.0)));
+    -1.0 * stk::math::tanh(1.0 - 1.0 / stk::math::sqrt(stk::math::max(
+                                     stk::math::min(avgResAdeq, 1.0), small)));
 
   C_F_tmp =
     C_F_tmp *
