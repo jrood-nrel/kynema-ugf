@@ -18,6 +18,7 @@
 #include "EigenDecomposition.h"
 #include "utils/AMSUtils.h"
 #include "SolutionOptions.h"
+#include <limits>
 
 namespace sierra {
 namespace kynema_ugf {
@@ -386,7 +387,10 @@ SSTAMSAveragesAlg::execute()
       const DblType v2 =
         1.0 / v2cMu *
         (tvisc.get(mi, 0) / density.get(mi, 0) / avgTime.get(mi, 0));
-      const DblType PMscale = stk::math::pow(1.5 * beta.get(mi, 0) * v2, -1.5);
+      const DblType PMbase = 1.5 * beta.get(mi, 0) * v2;
+      const DblType PMbaseSafe =
+        stk::math::max(PMbase, std::numeric_limits<DblType>::epsilon());
+      const DblType PMscale = stk::math::pow(PMbaseSafe, -1.5);
 
       // Handle case where tke = 0, should only occur at a wall boundary
       if (tke.get(mi, 0) == 0.0)
