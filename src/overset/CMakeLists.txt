@@ -22,7 +22,8 @@ if(ENABLE_TIOGA)
    if(ENABLE_CUDA)
       # Work around nvcc/cudafe++ ICE (CUDA 12.8 + GCC 12.5) in TiogaOptions.C.
       set_source_files_properties(
-         ${CMAKE_CURRENT_SOURCE_DIR}/TiogaOptions.C PROPERTIES COMPILE_OPTIONS
-                                                         "--host-only")
+         ${CMAKE_CURRENT_SOURCE_DIR}/TiogaOptions.C
+         TARGET_DIRECTORY ${kynema_ugf_lib_name}
+         PROPERTIES COMPILE_OPTIONS "--host-only")
    endif()
 endif()
