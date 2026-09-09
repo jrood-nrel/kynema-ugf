@@ -10,8 +10,8 @@
 #ifndef TIOGAREF_H
 #define TIOGAREF_H
 
+#include <cstdint>
 #include <mpi.h>
-#include <stk_mesh/base/Types.hpp>
 #include <memory>
 #include <vector>
 
@@ -92,8 +92,8 @@ void tioga_register_grid_data(
   int* num_verts,
   int* num_cells,
   int** tioga_conn,
-  stk::mesh::EntityId* cell_gid,
-  stk::mesh::EntityId* node_gid);
+  std::uint64_t* cell_gid,
+  std::uint64_t* node_gid);
 void tioga_set_cell_iblank(int meshtag, int* iblank_cell);
 void tioga_set_resolutions(int meshtag, double* node_res, double* cell_res);
 void tioga_register_solution(int meshtag, double* qsol, int ncomp);

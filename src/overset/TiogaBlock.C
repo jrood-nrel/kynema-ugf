@@ -657,7 +657,8 @@ TiogaBlock::register_block()
     bdata_.wallIDs_.h_view.data(), bdata_.ovsetIDs_.h_view.data(),
     bdata_.num_verts_.h_view.size(), bdata_.num_verts_.h_view.data(),
     bdata_.num_cells_.h_view.data(), tioga_conn_,
-    bdata_.cell_gid_.h_view.data(), bdata_.node_gid_.h_view.data());
+    reinterpret_cast<std::uint64_t*>(bdata_.cell_gid_.h_view.data()),
+    reinterpret_cast<std::uint64_t*>(bdata_.node_gid_.h_view.data()));
   // Indicate that we want element IBLANK information returned
   tioga_set_cell_iblank(meshtag_, bdata_.iblank_cell_.h_view.data());
 

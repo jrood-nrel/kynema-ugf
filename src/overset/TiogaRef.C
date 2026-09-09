@@ -134,8 +134,8 @@ tioga_register_grid_data(
   int* num_verts,
   int* num_cells,
   int** tioga_conn,
-  stk::mesh::EntityId* cell_gid,
-  stk::mesh::EntityId* node_gid)
+  std::uint64_t* cell_gid,
+  std::uint64_t* node_gid)
 {
   TiogaRef::self().get().registerGridData(
     meshtag, num_nodes, xyz, iblank, num_wallbc, num_ovsetbc, wall_ids,
