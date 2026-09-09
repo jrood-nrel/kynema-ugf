@@ -51,6 +51,30 @@ TiogaRef::~TiogaRef()
   }
 }
 
+void
+tioga_set_communicator(MPI_Comm comm, int rank, int size)
+{
+  TiogaRef::self().get().setCommunicator(comm, rank, size);
+}
+
+void
+tioga_profile()
+{
+  TiogaRef::self().get().profile();
+}
+
+void
+tioga_perform_connectivity()
+{
+  TiogaRef::self().get().performConnectivity();
+}
+
+void
+tioga_data_update(int nvar, int row_major)
+{
+  TiogaRef::self().get().dataUpdate(nvar, row_major);
+}
+
 } // namespace tioga_kynema_ugf
 
 #endif
