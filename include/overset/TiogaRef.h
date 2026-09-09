@@ -10,6 +10,7 @@
 #ifndef TIOGAREF_H
 #define TIOGAREF_H
 
+#include <mpi.h>
 #include <memory>
 
 namespace TIOGA {
@@ -60,6 +61,14 @@ private:
 
   bool owned_{false};
 };
+
+// --- TIOGA API shims -------------------------------------------------
+// Defined in TiogaRef.C, the only TU that includes tioga.h. This keeps
+// tioga.h out of translation units that pull in Kokkos/CUDA headers.
+void tioga_set_communicator(MPI_Comm comm, int rank, int size);
+void tioga_profile();
+void tioga_perform_connectivity();
+void tioga_data_update(int nvar, int row_major);
 
 } // namespace tioga_kynema_ugf
 

@@ -15,10 +15,6 @@
 #include "KynemaUGFEnv.h"
 #include "Realm.h"
 
-#ifdef KYNEMA_UGF_USES_TIOGA
-#include "tioga.h"
-#endif
-
 namespace sierra {
 namespace kynema_ugf {
 
@@ -30,10 +26,8 @@ void
 ExtOverset::set_communicator()
 {
 #ifdef KYNEMA_UGF_USES_TIOGA
-  auto& tg = tioga_kynema_ugf::TiogaRef::self().get();
-
   auto& env = KynemaUGFEnv::self();
-  tg.setCommunicator(
+  tioga_kynema_ugf::tioga_set_communicator(
     env.parallel_comm(), env.parallel_rank(), env.parallel_size());
 #endif
 }
@@ -99,14 +93,12 @@ ExtOverset::update_connectivity()
     return;
 
 #ifdef KYNEMA_UGF_USES_TIOGA
-  auto& tg = tioga_kynema_ugf::TiogaRef::self().get();
-
   for (auto* tgiface : tgIfaceVec_) {
     tgiface->register_mesh();
   }
 
-  tg.profile();
-  tg.performConnectivity();
+  tioga_kynema_ugf::tioga_profile();
+  tioga_kynema_ugf::tioga_perform_connectivity();
 
   for (auto* tgiface : tgIfaceVec_) {
     tgiface->post_connectivity_work(isDecoupled_);
@@ -148,7 +140,6 @@ ExtOverset::exchange_solution()
 
 #ifdef KYNEMA_UGF_USES_TIOGA
   const int row_major = 0;
-  auto& tg = tioga_kynema_ugf::TiogaRef::self().get();
 
   int ncomp = 0;
   for (auto* realm : time_.realmVec_) {
@@ -161,7 +152,7 @@ ExtOverset::exchange_solution()
       mgr.register_solution(realm->equationSystems_.oversetUpdater_->fields_);
   }
 
-  tg.dataUpdate(ncomp, row_major);
+  tioga_kynema_ugf::tioga_data_update(ncomp, row_major);
 
   for (auto* realm : time_.realmVec_) {
     if (!realm->hasOverset_)
