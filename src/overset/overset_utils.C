@@ -8,17 +8,17 @@
 //
 
 #include "overset/overset_utils.h"
-#include "Realm.h"
+#include "stk_mesh/base/MetaData.hpp"
 
 namespace sierra {
 namespace kynema_ugf {
 namespace overset_utils {
 
 std::vector<OversetFieldData>
-get_overset_field_data(Realm& realm, std::vector<std::string> fnames)
+get_overset_field_data(
+  const stk::mesh::MetaData& meta, std::vector<std::string> fnames)
 {
   std::vector<OversetFieldData> fields;
-  const auto& meta = realm.meta_data();
   const int row = 1;
 
   for (const auto& ff : fnames) {
