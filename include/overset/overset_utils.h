@@ -11,18 +11,22 @@
 #define OVERSET_UTILS_H
 
 #include "overset/OversetFieldData.h"
-#include <vector>
 #include <string>
+#include <vector>
+
+namespace stk {
+namespace mesh {
+class MetaData;
+}
+} // namespace stk
 
 namespace sierra {
 namespace kynema_ugf {
 
-class Realm;
-
 namespace overset_utils {
 
-std::vector<OversetFieldData>
-get_overset_field_data(Realm&, std::vector<std::string> fnames);
+std::vector<OversetFieldData> get_overset_field_data(
+  const stk::mesh::MetaData&, std::vector<std::string> fnames);
 }
 } // namespace kynema_ugf
 } // namespace sierra

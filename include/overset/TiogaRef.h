@@ -11,6 +11,7 @@
 #define TIOGAREF_H
 
 #include <mpi.h>
+#include <stk_mesh/base/Entity.hpp>
 #include <memory>
 
 namespace TIOGA {
@@ -69,6 +70,27 @@ void tioga_set_communicator(MPI_Comm comm, int rank, int size);
 void tioga_profile();
 void tioga_perform_connectivity();
 void tioga_data_update(int nvar, int row_major);
+void tioga_get_donor_count(int meshtag, int* dcount, int* fcount);
+void tioga_get_donor_info(
+  int meshtag, int* receptor_info, int* inode, double* frac, int* dcount);
+void tioga_register_grid_data(
+  int meshtag,
+  int num_nodes,
+  double* xyz,
+  int* iblank,
+  int num_wallbc,
+  int num_ovsetbc,
+  int* wall_ids,
+  int* ovset_ids,
+  int num_topologies,
+  int* num_verts,
+  int* num_cells,
+  int** tioga_conn,
+  stk::mesh::EntityId* cell_gid,
+  stk::mesh::EntityId* node_gid);
+void tioga_set_cell_iblank(int meshtag, int* iblank_cell);
+void tioga_set_resolutions(int meshtag, double* node_res, double* cell_res);
+void tioga_register_solution(int meshtag, double* qsol, int ncomp);
 
 } // namespace tioga_kynema_ugf
 

@@ -182,7 +182,7 @@ ExtOverset::register_solution(const std::vector<std::string>& fnames)
       continue;
 
     const auto fields =
-      overset_utils::get_overset_field_data(*realm, slnFieldNames_);
+      overset_utils::get_overset_field_data(realm->meta_data(), slnFieldNames_);
     auto& mgr =
       dynamic_cast<OversetManagerTIOGA*>(realm->oversetManager_)->tiogaIface_;
     ncomp = mgr.register_solution(fields);
@@ -205,7 +205,7 @@ ExtOverset::update_solution()
       continue;
 
     const auto fields =
-      overset_utils::get_overset_field_data(*realm, slnFieldNames_);
+      overset_utils::get_overset_field_data(realm->meta_data(), slnFieldNames_);
     auto& mgr =
       dynamic_cast<OversetManagerTIOGA*>(realm->oversetManager_)->tiogaIface_;
     mgr.update_solution(fields);
