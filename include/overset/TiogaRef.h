@@ -11,7 +11,7 @@
 #define TIOGAREF_H
 
 #include <mpi.h>
-#include <stk_mesh/base/Entity.hpp>
+#include <stk_mesh/base/Types.hpp>
 #include <memory>
 
 namespace TIOGA {
