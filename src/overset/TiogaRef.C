@@ -10,6 +10,7 @@
 #ifdef KYNEMA_UGF_USES_TIOGA
 
 #include "overset/TiogaRef.h"
+#include "overset/TiogaOptions.h"
 
 #include "tioga.h"
 
@@ -58,6 +59,24 @@ tioga_set_communicator(MPI_Comm comm, int rank, int size)
 }
 
 void
+tioga_set_options(const TiogaOptions& opts)
+{
+  auto& tg = TiogaRef::self().get();
+
+  tg.setSymmetry(opts.symmetry_dir());
+
+  if (opts.has_mexclude()) {
+    int mexclude = opts.mexclude();
+    tg.setMexclude(&mexclude);
+  }
+
+  if (opts.has_num_fringe()) {
+    int nfringe = opts.num_fringe();
+    tg.setNfringe(&nfringe);
+  }
+}
+
+void
 tioga_profile()
 {
   TiogaRef::self().get().profile();
@@ -70,9 +89,21 @@ tioga_perform_connectivity()
 }
 
 void
+tioga_reduce_fringes()
+{
+  TiogaRef::self().get().reduce_fringes();
+}
+
+void
 tioga_data_update(int nvar, int row_major)
 {
   TiogaRef::self().get().dataUpdate(nvar, row_major);
+}
+
+void
+tioga_get_receptor_info(std::vector<int>& receptors)
+{
+  TiogaRef::self().get().getReceptorInfo(receptors);
 }
 
 void

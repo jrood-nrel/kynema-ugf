@@ -34,8 +34,6 @@
 #include <algorithm>
 #include <numeric>
 
-#include "tioga.h"
-
 namespace tioga_kynema_ugf {
 
 TiogaSTKIface::TiogaSTKIface(
@@ -45,7 +43,6 @@ TiogaSTKIface::TiogaSTKIface(
   : oversetManager_(oversetManager),
     meta_(*oversetManager.metaData_),
     bulk_(*oversetManager.bulkData_),
-    tg_(TiogaRef::self().get()),
     coordsName_(coordsName)
 {
   load(node);
@@ -95,7 +92,7 @@ TiogaSTKIface::setup(stk::mesh::PartVector& bcPartVec)
 void
 TiogaSTKIface::initialize()
 {
-  tiogaOpts_.set_options(tg_);
+  tioga_set_options(tiogaOpts_);
 
   sierra::kynema_ugf::KynemaUGFEnv::self().kynema_ugfOutputP0()
     << "TIOGA: Initializing overset mesh blocks: " << std::endl;
@@ -121,10 +118,10 @@ TiogaSTKIface::execute(const bool isDecoupled)
   register_mesh();
 
   // Determine overset connectivity
-  tg_.profile();
-  tg_.performConnectivity();
+  tioga_profile();
+  tioga_perform_connectivity();
   if (tiogaOpts_.reduce_fringes())
-    tg_.reduce_fringes();
+    tioga_reduce_fringes();
 
   post_connectivity_work(isDecoupled);
 }
@@ -258,7 +255,7 @@ TiogaSTKIface::get_receptor_info()
   // Ask TIOGA for the fringe points and their corresponding donor element
   // information
   std::vector<int> receptors;
-  tg_.getReceptorInfo(receptors);
+  tioga_get_receptor_info(receptors);
 
   // Process TIOGA receptors array and fill in the oversetInfoVec used for
   // subsequent KynemaUGF computations.
@@ -485,7 +482,7 @@ TiogaSTKIface::overset_update_fields(
   for (auto& tb : blocks_)
     tb->register_solution(fields, nComp);
 
-  tg_.dataUpdate(nComp, row_major);
+  tioga_data_update(nComp, row_major);
 
   for (auto& tb : blocks_)
     tb->update_solution(fields);
@@ -542,7 +539,7 @@ TiogaSTKIface::overset_update_field(
   for (auto& tb : blocks_)
     tb->register_solution(fdata);
 
-  tg_.dataUpdate(nrows * ncols, row_major);
+  tioga_data_update(nrows * ncols, row_major);
 
   for (auto& tb : blocks_)
     tb->update_solution(fdata);
