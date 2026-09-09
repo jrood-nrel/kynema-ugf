@@ -17,10 +17,6 @@ namespace YAML {
 class Node;
 }
 
-namespace TIOGA {
-class tioga;
-}
-
 namespace sierra {
 namespace kynema_ugf {
 
@@ -140,9 +136,6 @@ private:
   //! List of TIOGA data structures for each mesh block participating in
   //! overset connectivity
   std::vector<std::unique_ptr<TiogaBlock>> blocks_;
-
-  //! Reference to the TIOGA API interface
-  TIOGA::tioga& tg_;
 
   //! Work array used to hold donor elements that require ghosting to receptor
   //! MPI ranks

@@ -13,12 +13,15 @@
 #include <mpi.h>
 #include <stk_mesh/base/Types.hpp>
 #include <memory>
+#include <vector>
 
 namespace TIOGA {
 class tioga;
 }
 
 namespace tioga_kynema_ugf {
+
+class TiogaOptions;
 
 /** Manager for the TIOGA handle
  *
@@ -67,9 +70,12 @@ private:
 // Defined in TiogaRef.C, the only TU that includes tioga.h. This keeps
 // tioga.h out of translation units that pull in Kokkos/CUDA headers.
 void tioga_set_communicator(MPI_Comm comm, int rank, int size);
+void tioga_set_options(const TiogaOptions& opts);
 void tioga_profile();
 void tioga_perform_connectivity();
+void tioga_reduce_fringes();
 void tioga_data_update(int nvar, int row_major);
+void tioga_get_receptor_info(std::vector<int>& receptors);
 void tioga_get_donor_count(int meshtag, int* dcount, int* fcount);
 void tioga_get_donor_info(
   int meshtag, int* receptor_info, int* inode, double* frac, int* dcount);
