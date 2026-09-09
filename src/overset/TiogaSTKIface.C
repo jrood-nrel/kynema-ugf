@@ -151,7 +151,7 @@ TiogaSTKIface::register_mesh()
 
   for (auto& tb : blocks_) {
     tb->adjust_node_resolutions();
-    tb->register_block(tg_);
+    tb->register_block();
   }
 }
 
@@ -167,7 +167,7 @@ TiogaSTKIface::post_connectivity_work(const bool isDecoupled)
     // For each block determine donor elements that needs to be ghosted to other
     // MPI ranks
     if (!isDecoupled)
-      tb->get_donor_info(tg_, elemsToGhost_);
+      tb->get_donor_info(elemsToGhost_);
   }
 
   // Synchronize IBLANK data for shared nodes
@@ -483,7 +483,7 @@ TiogaSTKIface::overset_update_fields(
   }
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fields, nComp);
+    tb->register_solution(fields, nComp);
 
   tg_.dataUpdate(nComp, row_major);
 
@@ -508,7 +508,7 @@ TiogaSTKIface::register_solution(
   }
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fields, nComp);
+    tb->register_solution(fields, nComp);
 
   return nComp;
 }
@@ -540,7 +540,7 @@ TiogaSTKIface::overset_update_field(
   field->sync_to_host();
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fdata);
+    tb->register_solution(fdata);
 
   tg_.dataUpdate(nrows * ncols, row_major);
 
