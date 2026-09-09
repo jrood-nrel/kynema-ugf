@@ -10,13 +10,18 @@
 #ifndef TIOGAREF_H
 #define TIOGAREF_H
 
+#include <cstdint>
+#include <mpi.h>
 #include <memory>
+#include <vector>
 
 namespace TIOGA {
 class tioga;
 }
 
 namespace tioga_kynema_ugf {
+
+class TiogaOptions;
 
 /** Manager for the TIOGA handle
  *
@@ -60,6 +65,38 @@ private:
 
   bool owned_{false};
 };
+
+// --- TIOGA API shims -------------------------------------------------
+// Defined in TiogaRef.C, the only TU that includes tioga.h. This keeps
+// tioga.h out of translation units that pull in Kokkos/CUDA headers.
+void tioga_set_communicator(MPI_Comm comm, int rank, int size);
+void tioga_set_options(const TiogaOptions& opts);
+void tioga_profile();
+void tioga_perform_connectivity();
+void tioga_reduce_fringes();
+void tioga_data_update(int nvar, int row_major);
+void tioga_get_receptor_info(std::vector<int>& receptors);
+void tioga_get_donor_count(int meshtag, int* dcount, int* fcount);
+void tioga_get_donor_info(
+  int meshtag, int* receptor_info, int* inode, double* frac, int* dcount);
+void tioga_register_grid_data(
+  int meshtag,
+  int num_nodes,
+  double* xyz,
+  int* iblank,
+  int num_wallbc,
+  int num_ovsetbc,
+  int* wall_ids,
+  int* ovset_ids,
+  int num_topologies,
+  int* num_verts,
+  int* num_cells,
+  int** tioga_conn,
+  std::uint64_t* cell_gid,
+  std::uint64_t* node_gid);
+void tioga_set_cell_iblank(int meshtag, int* iblank_cell);
+void tioga_set_resolutions(int meshtag, double* node_res, double* cell_res);
+void tioga_register_solution(int meshtag, double* qsol, int ncomp);
 
 } // namespace tioga_kynema_ugf
 

@@ -10,12 +10,11 @@
 #ifdef KYNEMA_UGF_USES_TIOGA
 
 #include "overset/TiogaBlock.h"
+#include "overset/TiogaRef.h"
 #include "overset/OversetNGP.h"
 #include "KynemaUGFEnv.h"
 
 #include <stk_util/parallel/ParallelReduce.hpp>
-
-#include "tioga.h"
 
 #include <numeric>
 #include <iostream>
@@ -336,7 +335,7 @@ TiogaBlock::adjust_node_resolutions()
 }
 
 void
-TiogaBlock::get_donor_info(TIOGA::tioga& tg, stk::mesh::EntityProcVec& egvec)
+TiogaBlock::get_donor_info(stk::mesh::EntityProcVec& egvec)
 {
   // Do nothing if this mesh block isn't present in this MPI Rank
   if (num_nodes_ < 1)
@@ -345,7 +344,7 @@ TiogaBlock::get_donor_info(TIOGA::tioga& tg, stk::mesh::EntityProcVec& egvec)
   int dcount, fcount;
 
   // Call TIOGA API to determine donor info array sizes
-  tg.getDonorCount(meshtag_, &dcount, &fcount);
+  tioga_get_donor_count(meshtag_, &dcount, &fcount);
 
   // Receptor info: rProcID, rNodeID, blkID, nFractions
   std::vector<int> receptorInfo(dcount * 4);
@@ -357,7 +356,7 @@ TiogaBlock::get_donor_info(TIOGA::tioga& tg, stk::mesh::EntityProcVec& egvec)
   std::vector<double> frac(fcount);
 
   // Populate the donor information arrays through TIOGA API call
-  tg.getDonorInfo(
+  tioga_get_donor_info(
     meshtag_, receptorInfo.data(), inode.data(), frac.data(), &dcount);
 
   // With getDonorInfo TIOGA returns information about the donor elements (in
@@ -642,7 +641,7 @@ TiogaBlock::reset_iblank_data()
 }
 
 void
-TiogaBlock::register_block(TIOGA::tioga& tg)
+TiogaBlock::register_block()
 {
   // Do nothing if this mesh block isn't present in this MPI Rank
   if (num_nodes_ < 1)
@@ -652,30 +651,19 @@ TiogaBlock::register_block(TIOGA::tioga& tg)
   reset_iblank_data();
 
   // Register the mesh block information to TIOGA
-  tg.registerGridData(
-    meshtag_,                        // Unique body tag
-    num_nodes_,                      // Number of nodes in this mesh block
-    bdata_.xyz_.h_view.data(),       // Nodal coordinates
-    bdata_.iblank_.h_view.data(),    // iblank array corresponding to nodes
-    num_wallbc_,                     // Number of Wall BC nodes
-    num_ovsetbc_,                    // Number of overset BC nodes
-    bdata_.wallIDs_.h_view.data(),   // Node IDs of wall BC nodes
-    bdata_.ovsetIDs_.h_view.data(),  // Node IDs of overset BC nodes
-    bdata_.num_verts_.h_view.size(), // Number of topologies in this mesh block
-    bdata_.num_verts_.h_view.data(), // Number of vertices per topology
-    bdata_.num_cells_.h_view.data(), // Number of cells for each topology
-    tioga_conn_,                     // Element node connectivity information
-    bdata_.cell_gid_.h_view.data()   // Global ID for the element array
-#ifdef TIOGA_HAS_NODEGID
-    ,
-    bdata_.node_gid_.h_view.data() // Global ID for the node array
-#endif
-  );
+  tioga_register_grid_data(
+    meshtag_, num_nodes_, bdata_.xyz_.h_view.data(),
+    bdata_.iblank_.h_view.data(), num_wallbc_, num_ovsetbc_,
+    bdata_.wallIDs_.h_view.data(), bdata_.ovsetIDs_.h_view.data(),
+    bdata_.num_verts_.h_view.size(), bdata_.num_verts_.h_view.data(),
+    bdata_.num_cells_.h_view.data(), tioga_conn_,
+    reinterpret_cast<std::uint64_t*>(bdata_.cell_gid_.h_view.data()),
+    reinterpret_cast<std::uint64_t*>(bdata_.node_gid_.h_view.data()));
   // Indicate that we want element IBLANK information returned
-  tg.set_cell_iblank(meshtag_, bdata_.iblank_cell_.h_view.data());
+  tioga_set_cell_iblank(meshtag_, bdata_.iblank_cell_.h_view.data());
 
   // Register cell/node resolutions for TIOGA
-  tg.setResolutions(
+  tioga_set_resolutions(
     meshtag_, bdata_.node_res_.h_view.data(), bdata_.cell_res_.h_view.data());
 }
 
@@ -719,7 +707,6 @@ TiogaBlock::print_summary()
 
 void
 TiogaBlock::register_solution(
-  TIOGA::tioga& tg,
   const std::vector<sierra::kynema_ugf::OversetFieldData>& fields,
   const int ncomp)
 {
@@ -751,18 +738,11 @@ TiogaBlock::register_solution(
     }
   }
 
-#if TIOGA_HAS_NGP_IFACE
-  constexpr int row_major = 0;
-  tg.register_unstructured_solution(
-    meshtag_, qsol.h_view.data(), ncomp, row_major);
-#else
-  tg.registerSolution(meshtag_, qsol.h_view.data());
-#endif
+  tioga_register_solution(meshtag_, qsol.h_view.data(), ncomp);
 }
 
 void
-TiogaBlock::register_solution(
-  TIOGA::tioga& tg, const sierra::kynema_ugf::OversetFieldData& field)
+TiogaBlock::register_solution(const sierra::kynema_ugf::OversetFieldData& field)
 {
   if (num_nodes_ < 1)
     return;
@@ -789,13 +769,7 @@ TiogaBlock::register_solution(
     }
   }
 
-#if TIOGA_HAS_NGP_IFACE
-  constexpr int row_major = 0;
-  tg.register_unstructured_solution(
-    meshtag_, qsol.h_view.data(), fsize, row_major);
-#else
-  tg.registerSolution(meshtag_, qsol.h_view.data());
-#endif
+  tioga_register_solution(meshtag_, qsol.h_view.data(), fsize);
 }
 
 void

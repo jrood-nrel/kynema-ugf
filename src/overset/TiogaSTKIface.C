@@ -34,8 +34,6 @@
 #include <algorithm>
 #include <numeric>
 
-#include "tioga.h"
-
 namespace tioga_kynema_ugf {
 
 TiogaSTKIface::TiogaSTKIface(
@@ -45,7 +43,6 @@ TiogaSTKIface::TiogaSTKIface(
   : oversetManager_(oversetManager),
     meta_(*oversetManager.metaData_),
     bulk_(*oversetManager.bulkData_),
-    tg_(TiogaRef::self().get()),
     coordsName_(coordsName)
 {
   load(node);
@@ -95,7 +92,7 @@ TiogaSTKIface::setup(stk::mesh::PartVector& bcPartVec)
 void
 TiogaSTKIface::initialize()
 {
-  tiogaOpts_.set_options(tg_);
+  tioga_set_options(tiogaOpts_);
 
   sierra::kynema_ugf::KynemaUGFEnv::self().kynema_ugfOutputP0()
     << "TIOGA: Initializing overset mesh blocks: " << std::endl;
@@ -121,10 +118,10 @@ TiogaSTKIface::execute(const bool isDecoupled)
   register_mesh();
 
   // Determine overset connectivity
-  tg_.profile();
-  tg_.performConnectivity();
+  tioga_profile();
+  tioga_perform_connectivity();
   if (tiogaOpts_.reduce_fringes())
-    tg_.reduce_fringes();
+    tioga_reduce_fringes();
 
   post_connectivity_work(isDecoupled);
 }
@@ -151,7 +148,7 @@ TiogaSTKIface::register_mesh()
 
   for (auto& tb : blocks_) {
     tb->adjust_node_resolutions();
-    tb->register_block(tg_);
+    tb->register_block();
   }
 }
 
@@ -167,7 +164,7 @@ TiogaSTKIface::post_connectivity_work(const bool isDecoupled)
     // For each block determine donor elements that needs to be ghosted to other
     // MPI ranks
     if (!isDecoupled)
-      tb->get_donor_info(tg_, elemsToGhost_);
+      tb->get_donor_info(elemsToGhost_);
   }
 
   // Synchronize IBLANK data for shared nodes
@@ -258,7 +255,7 @@ TiogaSTKIface::get_receptor_info()
   // Ask TIOGA for the fringe points and their corresponding donor element
   // information
   std::vector<int> receptors;
-  tg_.getReceptorInfo(receptors);
+  tioga_get_receptor_info(receptors);
 
   // Process TIOGA receptors array and fill in the oversetInfoVec used for
   // subsequent KynemaUGF computations.
@@ -483,9 +480,9 @@ TiogaSTKIface::overset_update_fields(
   }
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fields, nComp);
+    tb->register_solution(fields, nComp);
 
-  tg_.dataUpdate(nComp, row_major);
+  tioga_data_update(nComp, row_major);
 
   for (auto& tb : blocks_)
     tb->update_solution(fields);
@@ -508,7 +505,7 @@ TiogaSTKIface::register_solution(
   }
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fields, nComp);
+    tb->register_solution(fields, nComp);
 
   return nComp;
 }
@@ -540,9 +537,9 @@ TiogaSTKIface::overset_update_field(
   field->sync_to_host();
 
   for (auto& tb : blocks_)
-    tb->register_solution(tg_, fdata);
+    tb->register_solution(fdata);
 
-  tg_.dataUpdate(nrows * ncols, row_major);
+  tioga_data_update(nrows * ncols, row_major);
 
   for (auto& tb : blocks_)
     tb->update_solution(fdata);

@@ -12,10 +12,6 @@
 
 #include "yaml-cpp/yaml.h"
 
-namespace TIOGA {
-class tioga;
-}
-
 namespace tioga_kynema_ugf {
 
 // Notes:
@@ -38,11 +34,12 @@ public:
    */
   void load(const YAML::Node&);
 
-  /** Control TIOGA behavior by calling the appropriate API calls.
-   */
-  void set_options(TIOGA::tioga&);
-
   bool reduce_fringes() const { return reduceFringes_; }
+  int symmetry_dir() const { return symmetryDir_; }
+  bool has_num_fringe() const { return hasNumFringe_; }
+  int num_fringe() const { return nFringe_; }
+  bool has_mexclude() const { return hasMexclude_; }
+  int mexclude() const { return mExclude_; }
 
   double cell_res_mult() const { return cellResMult_; }
   double node_res_mult() const { return nodeResMult_; }

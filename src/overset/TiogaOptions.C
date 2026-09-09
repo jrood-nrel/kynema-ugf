@@ -9,8 +9,6 @@
 
 #include "overset/TiogaOptions.h"
 
-#include "tioga.h"
-
 namespace tioga_kynema_ugf {
 
 void
@@ -47,18 +45,6 @@ TiogaOptions::load(const YAML::Node& node)
   if (nodeResolutionMultiplier) {
     nodeResMult_ = nodeResolutionMultiplier.as<double>();
   }
-}
-
-void
-TiogaOptions::set_options(TIOGA::tioga& tg)
-{
-  tg.setSymmetry(symmetryDir_);
-
-  if (hasMexclude_)
-    tg.setMexclude(&mExclude_);
-
-  if (hasNumFringe_)
-    tg.setNfringe(&nFringe_);
 }
 
 } // namespace tioga_kynema_ugf

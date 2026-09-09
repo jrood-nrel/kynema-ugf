@@ -16,10 +16,6 @@
 #include <memory>
 #include <string>
 
-namespace TIOGA {
-class tioga;
-}
-
 namespace tioga_kynema_ugf {
 
 /** Data representing an unstructured mesh block
@@ -181,7 +177,7 @@ public:
    *  overset holecutting that overrides the default TIOGA behavior of
    * selecting donor and receptor points based on local cell volume.
    */
-  void register_block(TIOGA::tioga&);
+  void register_block();
 
   /** Update iblanks after connectivity updates
    */
@@ -201,15 +197,12 @@ public:
    *  @param egvec List of {donorElement, receptorMPIRank} pairs to be
    * populated
    */
-  void get_donor_info(TIOGA::tioga&, stk::mesh::EntityProcVec&);
+  void get_donor_info(stk::mesh::EntityProcVec&);
 
   void register_solution(
-    TIOGA::tioga&,
-    const std::vector<sierra::kynema_ugf::OversetFieldData>&,
-    const int);
+    const std::vector<sierra::kynema_ugf::OversetFieldData>&, const int);
 
-  void
-  register_solution(TIOGA::tioga&, const sierra::kynema_ugf::OversetFieldData&);
+  void register_solution(const sierra::kynema_ugf::OversetFieldData&);
 
   void
   update_solution(const std::vector<sierra::kynema_ugf::OversetFieldData>&);
