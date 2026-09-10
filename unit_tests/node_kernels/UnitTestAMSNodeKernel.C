@@ -15,6 +15,8 @@
 #include "node_kernels/TKESSTAMSNodeKernel.h"
 #include "node_kernels/MomentumSSTAMSForcingNodeKernel.h"
 
+#include <cmath>
+
 namespace {
 namespace hex8_golds {
 namespace tke_ams {
@@ -378,4 +380,43 @@ TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_zero_wall_inputs)
   helperObjs.execute();
 
   unit_test_kernel_utils::expect_all_near(helperObjs.linsys->rhs_, 0.0, 1.0e-12);
+}
+
+TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_finite_at_limits)
+{
+  if (bulk_->parallel_size() > 1)
+    return;
+
+  fill_mesh_and_init_fields();
+
+  stk::mesh::field_fill(1.0e-12, *tke_);
+  stk::mesh::field_fill(1.0e12, *sdr_);
+  stk::mesh::field_fill(0.0, *avgResAdeq_);
+
+  solnOpts_.meshMotion_ = false;
+  solnOpts_.externalMeshDeformation_ = false;
+  solnOpts_.initialize_turbulence_constants();
+  solnOpts_.eastVector_ = {1.0, 0.0, 0.0};
+  solnOpts_.northVector_ = {0.0, 1.0, 0.0};
+
+  unit_test_utils::NodeHelperObjects helperObjs(
+    bulk_, stk::topology::HEX_8, 3, partVec_[0]);
+
+  helperObjs.nodeAlg
+    ->add_kernel<sierra::kynema_ugf::MomentumSSTAMSForcingNodeKernel>(
+      *bulk_, solnOpts_);
+
+  sierra::kynema_ugf::TimeIntegrator timeIntegrator;
+  timeIntegrator.currentTime_ = 0.0;
+  timeIntegrator.timeStepN_ = 0.1;
+  timeIntegrator.timeStepNm1_ = 0.1;
+  timeIntegrator.gamma1_ = 1.0;
+  timeIntegrator.gamma2_ = -1.0;
+  timeIntegrator.gamma3_ = 0.0;
+  helperObjs.realm.timeIntegrator_ = &timeIntegrator;
+
+  helperObjs.execute();
+
+  for (unsigned i = 0; i < helperObjs.linsys->rhs_.extent(0); ++i)
+    ASSERT_TRUE(std::isfinite(helperObjs.linsys->rhs_(i)));
 }

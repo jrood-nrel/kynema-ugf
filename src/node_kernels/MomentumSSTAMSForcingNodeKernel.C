@@ -219,13 +219,16 @@ MomentumSSTAMSForcingNodeKernel::execute(
 
   const NodeKernelTraits::DblType b_kol =
     stk::math::min(blKol_ * stk::math::sqrt(mu * epsSafe / rhoSafe) / tke, 1.0);
+  NodeKernelTraits::DblType bhat = 10000.0;
+  if ((1.0 - b_kol) > 0.0) {
+    bhat = (1.0 - beta) / (1.0 - b_kol);
+  }
 
-  const NodeKernelTraits::DblType bhat = stk::math::if_then_else(
-    (1.0 - b_kol) > 0.0, (1.0 - beta) / (1.0 - b_kol), 10000.0);
+  const NodeKernelTraits::DblType avgResAdeqSafe =
+    stk::math::max(stk::math::min(avgResAdeq, 1.0), minDenom);
 
   NodeKernelTraits::DblType C_F_tmp =
-    -1.0 * stk::math::tanh(
-             1.0 - 1.0 / stk::math::sqrt(stk::math::min(avgResAdeq, 1.0)));
+    -1.0 * stk::math::tanh(1.0 - 1.0 / stk::math::sqrt(avgResAdeqSafe));
 
   C_F_tmp =
     C_F_tmp *
