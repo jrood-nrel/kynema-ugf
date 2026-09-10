@@ -341,8 +341,8 @@ TEST(TestEigen, testGeneralEigenvaluesNearDegenerateMatrix)
   const double trace2 = A[0][0] + A[1][1];
   const double det2 = A[0][0] * A[1][1] - A[0][1] * A[1][0];
   const double disc2 = std::sqrt(trace2 * trace2 - 4.0 * det2);
-  std::array<double, 3> gold = {0.5 * (trace2 - disc2), 0.5 * (trace2 + disc2),
-                                2.0};
+  std::array<double, 3> gold = {
+    0.5 * (trace2 - disc2), 0.5 * (trace2 + disc2), 2.0};
   std::sort(gold.begin(), gold.end());
 
   for (int i = 0; i < 3; ++i) {

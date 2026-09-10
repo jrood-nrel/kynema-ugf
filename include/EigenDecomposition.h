@@ -347,10 +347,10 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T discTerm4 = 27.0 * detA * detA;
   const T discTerm5 = 18.0 * trA * coFacA * detA;
   const T disc = discTerm1 - discTerm2 - discTerm3 - discTerm4 + discTerm5;
-  const T discTol = machEps *
-                    (stk::math::abs(discTerm1) + stk::math::abs(discTerm2) +
-                     stk::math::abs(discTerm3) + stk::math::abs(discTerm4) +
-                     stk::math::abs(discTerm5) + T(1.0));
+  const T discTol =
+    machEps * (stk::math::abs(discTerm1) + stk::math::abs(discTerm2) +
+               stk::math::abs(discTerm3) + stk::math::abs(discTerm4) +
+               stk::math::abs(discTerm5) + T(1.0));
 
   const auto check_one = disc < -discTol;
   const bool exit_now = stk::simd::are_all(check_one);
@@ -383,8 +383,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T linCoefSafe = stk::math::if_then_else(degenerate, T(-1.0), linCoef);
   const T acosArgRaw =
     3.0 * constCoef * stk::math::sqrt(-3.0 / linCoefSafe) / (2.0 * linCoefSafe);
-  const T acosArg =
-    stk::math::max(T(-1.0), stk::math::min(T(1.0), acosArgRaw));
+  const T acosArg = stk::math::max(T(-1.0), stk::math::min(T(1.0), acosArgRaw));
   const T phi = stk::math::acos(acosArg) / 3.0;
   const T amp = 2.0 * stk::math::sqrt(-linCoefSafe / 3.0);
 
