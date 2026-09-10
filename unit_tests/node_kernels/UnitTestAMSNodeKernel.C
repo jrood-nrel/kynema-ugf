@@ -379,7 +379,8 @@ TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_zero_wall_inputs)
 
   helperObjs.execute();
 
-  unit_test_kernel_utils::expect_all_near(helperObjs.linsys->rhs_, 0.0, 1.0e-12);
+  unit_test_kernel_utils::expect_all_near(
+    helperObjs.linsys->rhs_, 0.0, 1.0e-12);
 }
 
 TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_finite_at_limits)
