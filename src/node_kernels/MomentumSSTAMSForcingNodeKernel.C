@@ -154,14 +154,15 @@ MomentumSSTAMSForcingNodeKernel::execute(
                   (smallCl_ - forceCl_)) *
     stk::math::pow(beta * tke, 1.5) / epsSafe;
   length = stk::math::max(
-    length,
-    Ceta_ * (stk::math::pow(mu / rhoSafe, 0.75) / stk::math::pow(epsSafe, 0.25)));
+    length, Ceta_ * (stk::math::pow(mu / rhoSafe, 0.75) /
+                     stk::math::pow(epsSafe, 0.25)));
 
-  const NodeKernelTraits::DblType lengthY = stk::math::max(
-    stk::math::min(length, wallDist), 0.0);
+  const NodeKernelTraits::DblType lengthY =
+    stk::math::max(stk::math::min(length, wallDist), 0.0);
 
   NodeKernelTraits::DblType T_beta = beta * tke / epsSafe;
-  T_beta = stk::math::max(T_beta, Ct_ * stk::math::sqrt(mu / rhoSafe / epsSafe));
+  T_beta =
+    stk::math::max(T_beta, Ct_ * stk::math::sqrt(mu / rhoSafe / epsSafe));
   T_beta = blT_ * T_beta;
 
   // FIXME : Make this aware of wall direction, for now it is
