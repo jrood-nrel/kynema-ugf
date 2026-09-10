@@ -122,7 +122,7 @@ SSTAMSAveragesAlg::execute()
   const DblType beta_kol_local = beta_kol;
   const DblType aspectRatioSwitch = aspectRatioSwitch_;
   const DblType avgTimeCoeff = avgTimeCoeff_;
-  const DblType minPMbase = std::numeric_limits<DblType>::min();
+  const DblType minPMbase = std::numeric_limits<DblType>::epsilon();
   const auto lengthScaleLimiter = lengthScaleLimiter_;
 
   const bool RANSBelowKs = RANSBelowKs_;
