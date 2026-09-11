@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -140,6 +143,62 @@ TEST(TestEigen, testeigendecompandreconstruct2d)
     for (unsigned i = 0; i < 2; ++i) {
       EXPECT_NEAR(b_[i][j], A2d_rand[i][j], tol);
     }
+  }
+}
+
+TEST(TestEigen, testgeneraleigenvalueszeromatrix)
+{
+  double A[3][3] = {
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_DOUBLE_EQ(D[j][j], 0.0);
+    EXPECT_TRUE(std::isfinite(D[j][j]));
+  }
+}
+
+TEST(TestEigen, testgeneraleigenvaluestriplenonzeroeigenvalue)
+{
+  constexpr double c = 2.5;
+  double A[3][3] = {
+    {c, 0.0, 0.0},
+    {0.0, c, 0.0},
+    {0.0, 0.0, c},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_NEAR(D[j][j], c, 1.0e-14);
+    EXPECT_TRUE(std::isfinite(D[j][j]));
+  }
+}
+
+TEST(TestEigen, testgeneraleigenvaluesdistinctrealroots)
+{
+  double A[3][3] = {
+    {3.0, 0.0, 0.0},
+    {0.0, -1.0, 0.0},
+    {0.0, 0.0, 2.0},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  std::array<double, 3> eigenvalues = {D[0][0], D[1][1], D[2][2]};
+  std::sort(eigenvalues.begin(), eigenvalues.end());
+  constexpr std::array<double, 3> expected = {-1.0, 2.0, 3.0};
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_NEAR(eigenvalues[j], expected[j], 1.0e-13);
+    EXPECT_TRUE(std::isfinite(eigenvalues[j]));
   }
 }
 
