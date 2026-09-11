@@ -382,7 +382,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   }
 
   // Only numerically zero normalized p coefficients need a fallback.
-  const T pTol = stk::math::cbrt(discTol);
+  const T pTol = stk::math::sqrt(discTol / 4.0);
   const auto pTiny = stk::math::abs(p) <= pTol;
   const auto pNonPositive = p <= T(0.0);
   const auto vieteSafe = (!check_one) && pNonPositive;
