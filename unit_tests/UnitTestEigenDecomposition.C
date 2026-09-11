@@ -284,6 +284,27 @@ TEST(TestEigen, testgeneraleigenvaluesnonnormalmatrixlargeoffdiagonal)
   }
 }
 
+TEST(TestEigen, testgeneraleigenvaluesnonnormalmatrixhugeoffdiagonal)
+{
+  double A[3][3] = {
+    {0.0, 1.0e200, 0.0},
+    {0.0, 1.0, 0.0},
+    {0.0, 0.0, 2.0},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  std::array<double, 3> eigenvalues = {D[0][0], D[1][1], D[2][2]};
+  std::sort(eigenvalues.begin(), eigenvalues.end());
+  constexpr std::array<double, 3> expected = {0.0, 1.0, 2.0};
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_NEAR(eigenvalues[j], expected[j], 1.0e-13);
+    EXPECT_TRUE(std::isfinite(eigenvalues[j]));
+  }
+}
+
 TEST(TestEigen, testgeneraleigenvaluesmixedlanes_simd)
 {
   DoubleType A[3][3], Q[3][3], D[3][3];

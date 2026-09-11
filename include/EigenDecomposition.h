@@ -338,34 +338,25 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T centeredA00 = (A[0][0] - A[1][1] + A[0][0] - A[2][2]) / 3.0;
   const T centeredA11 = (A[1][1] - A[0][0] + A[1][1] - A[2][2]) / 3.0;
   const T centeredA22 = -centeredA00 - centeredA11;
-  const T centeredScale = stk::math::max(
-    stk::math::max(stk::math::abs(centeredA00), stk::math::abs(centeredA11)),
-    stk::math::max(
-      stk::math::max(stk::math::abs(centeredA22), stk::math::abs(A[0][1])),
-      stk::math::max(
-        stk::math::max(stk::math::abs(A[0][2]), stk::math::abs(A[1][0])),
-        stk::math::max(
-          stk::math::max(stk::math::abs(A[1][2]), stk::math::abs(A[2][0])),
-          stk::math::abs(A[2][1])))));
-  const auto centeredScaleTiny = centeredScale == T(0.0);
-  const T centeredScaleSafe =
-    stk::math::if_then_else(centeredScaleTiny, T(1.0), centeredScale);
+  const T linCoef =
+    centeredA00 * centeredA11 - A[0][1] * A[1][0] +
+    centeredA11 * centeredA22 - A[1][2] * A[2][1] +
+    centeredA00 * centeredA22 - A[0][2] * A[2][0];
+  const T constCoef =
+    -(centeredA00 * centeredA11 * centeredA22 + A[0][1] * A[1][2] * A[2][0] +
+      A[0][2] * A[1][0] * A[2][1] - centeredA00 * A[1][2] * A[2][1] -
+      A[0][1] * A[1][0] * centeredA22 - A[0][2] * centeredA11 * A[2][0]);
 
-  const T c00 = centeredA00 / centeredScaleSafe;
-  const T c11 = centeredA11 / centeredScaleSafe;
-  const T c22 = centeredA22 / centeredScaleSafe;
-  const T c01 = A[0][1] / centeredScaleSafe;
-  const T c02 = A[0][2] / centeredScaleSafe;
-  const T c10 = A[1][0] / centeredScaleSafe;
-  const T c12 = A[1][2] / centeredScaleSafe;
-  const T c20 = A[2][0] / centeredScaleSafe;
-  const T c21 = A[2][1] / centeredScaleSafe;
+  const T coeffScale = stk::math::max(
+    stk::math::sqrt(stk::math::abs(linCoef)),
+    stk::math::cbrt(stk::math::abs(constCoef)));
+  const auto coeffScaleTiny = coeffScale == T(0.0);
+  const T coeffScaleSafe =
+    stk::math::if_then_else(coeffScaleTiny, T(1.0), coeffScale);
+  const T coeffScaleSq = coeffScaleSafe * coeffScaleSafe;
 
-  const T p =
-    c00 * c11 - c01 * c10 + c11 * c22 - c12 * c21 + c00 * c22 - c02 * c20;
-  const T q =
-    -(c00 * c11 * c22 + c01 * c12 * c20 + c02 * c10 * c21 - c00 * c12 * c21 -
-      c01 * c10 * c22 - c02 * c11 * c20);
+  const T p = linCoef / coeffScaleSq;
+  const T q = constCoef / (coeffScaleSq * coeffScaleSafe);
 
   // Check to make sure all eigenvalues are real using normalized depressed
   // cubic coefficients: t^3 + p t + q = 0.
@@ -411,14 +402,14 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T t3Norm =
     stk::math::if_then_else(
       pTiny, tDegen, ampNorm * stk::math::cos(phiNorm - 4.0 * pi / 3.0));
-  const T t1 = t1Norm * centeredScaleSafe;
-  const T t2 = t2Norm * centeredScaleSafe;
-  const T t3 = t3Norm * centeredScaleSafe;
+  const T t1 = t1Norm * coeffScaleSafe;
+  const T t2 = t2Norm * coeffScaleSafe;
+  const T t3 = t3Norm * coeffScaleSafe;
 
   // Convert roots of depressed polynomial back to the eigenvalues
-  D[0][0] = t1 + trA / 3.0;
-  D[1][1] = t2 + trA / 3.0;
-  D[2][2] = t3 + trA / 3.0;
+  D[0][0] = t1 + trThird;
+  D[1][1] = t2 + trThird;
+  D[2][2] = t3 + trThird;
 
   // Zero out Q since this only returns eigenvalues
   Q[0][0] = Q[0][1] = Q[0][2] = Q[1][0] = Q[1][1] = Q[1][2] = Q[2][0] =
