@@ -364,7 +364,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T discMag = 4.0 * stk::math::abs(p * p * p) + 27.0 * stk::math::abs(q * q);
   const T discTol = 64.0 * machEps * (discMag + T(1.0));
   const auto check_one = disc < -discTol;
-  const bool exit_now = stk::simd::are_all(check_one);
+  const bool exit_now = stk::simd::are_any(check_one);
   if (exit_now) {
 #if !defined(KOKKOS_ENABLE_GPU)
     KynemaUGFEnv::self().kynema_ugfOutput()
@@ -382,8 +382,9 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   }
 
   // Only numerically zero normalized p coefficients need a fallback.
-  const T pTol = stk::math::sqrt(discTol / 4.0);
-  const auto pTiny = stk::math::abs(p) <= pTol;
+  const T pTolNorm = stk::math::sqrt(discTol / 4.0);
+  const T linTol = pTolNorm * coeffScaleSq;
+  const auto pTiny = stk::math::abs(linCoef) <= linTol;
   const auto pNonPositive = p <= T(0.0);
   const auto vieteSafe = (!check_one) && pNonPositive;
   const T pSafe = stk::math::if_then_else(
