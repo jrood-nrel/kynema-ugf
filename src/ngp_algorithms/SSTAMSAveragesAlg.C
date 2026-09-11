@@ -20,6 +20,8 @@
 #include "SolutionOptions.h"
 #include <limits>
 
+#include <limits>
+
 namespace sierra {
 namespace kynema_ugf {
 
@@ -121,6 +123,7 @@ SSTAMSAveragesAlg::execute()
   const DblType beta_kol_local = beta_kol;
   const DblType aspectRatioSwitch = aspectRatioSwitch_;
   const DblType avgTimeCoeff = avgTimeCoeff_;
+  const DblType minPMbase = std::numeric_limits<DblType>::epsilon();
   const auto lengthScaleLimiter = lengthScaleLimiter_;
 
   const bool RANSBelowKs = RANSBelowKs_;
@@ -383,21 +386,20 @@ SSTAMSAveragesAlg::execute()
         }
       }
 
-      // Scale PM first
-      const DblType v2 =
-        1.0 / v2cMu *
-        (tvisc.get(mi, 0) / density.get(mi, 0) / avgTime.get(mi, 0));
-      const DblType PMbase = 1.5 * beta.get(mi, 0) * v2;
-      const DblType PMbaseSafe =
-        stk::math::max(PMbase, std::numeric_limits<DblType>::epsilon());
-      const DblType PMscale = stk::math::pow(PMbaseSafe, -1.5);
-
       // Handle case where tke = 0, should only occur at a wall boundary
       if (tke.get(mi, 0) == 0.0)
         resAdeq.get(mi, 0) = 1.0;
       else if ((RANSBelowKs) && (coords.get(mi, gravity_i) <= k_s)) {
         resAdeq.get(mi, 0) = 1.0;
       } else {
+        // Scale PM first
+        const DblType v2 =
+          1.0 / v2cMu *
+          (tvisc.get(mi, 0) / density.get(mi, 0) / avgTime.get(mi, 0));
+        const DblType PMbase =
+          stk::math::max(1.5 * beta.get(mi, 0) * v2, minPMbase);
+        const DblType PMscale = stk::math::pow(PMbase, -1.5);
+
         for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i)
           for (int j = 0; j < kynema_ugf_ngp::NDimMax; ++j)
             PM[i][j] = PM[i][j] * PMscale;
