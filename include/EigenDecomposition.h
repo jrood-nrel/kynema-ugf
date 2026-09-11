@@ -362,24 +362,34 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 #endif
   }
 
-  // Convert to depressed cubic (substitute x = t - b/3a = t + trA/3)
-  // This leads to cubic: t^3 + pt + q  where the linear and constant
-  // coefficient are defined as below
-  const T linCoef = coFacA - trA * trA / 3.0;
-  const T constCoef = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
+  // Convert to depressed cubic (substitute x = t - b/3a = t + trA/3).
+  // Form the shifted matrix explicitly so the depressed cubic coefficients
+  // are translation invariant and remain well-scaled for large traces.
+  const T trThird = trA / 3.0;
+  const T centeredA00 = A[0][0] - trThird;
+  const T centeredA11 = A[1][1] - trThird;
+  const T centeredA22 = A[2][2] - trThird;
+  const T linCoef =
+    centeredA00 * centeredA11 - A[0][1] * A[1][0] +
+    centeredA11 * centeredA22 - A[1][2] * A[2][1] +
+    centeredA00 * centeredA22 - A[0][2] * A[2][0];
+  const T constCoef =
+    -(centeredA00 * centeredA11 * centeredA22 + A[0][1] * A[1][2] * A[2][0] +
+      A[0][2] * A[1][0] * A[2][1] - centeredA00 * A[1][2] * A[2][1] -
+      A[0][1] * A[1][0] * centeredA22 - A[0][2] * centeredA11 * A[2][0]);
 
-  // linCoef == 0 means the depressed cubic is t^3 + constCoef == 0 with a
-  // repeated root. Detect that condition relative to matrix scale so small but
-  // nondegenerate inputs do not get misclassified.
-  const T maxAbsA = stk::math::max(
+  // linCoef depends only on the trace-shifted matrix, so detect the repeated
+  // root condition relative to that translation-invariant scale.
+  const T maxAbsCenteredA = stk::math::max(
     stk::math::max(
-      stk::math::max(stk::math::abs(A[0][0]), stk::math::abs(A[0][1])),
+      stk::math::max(stk::math::abs(centeredA00), stk::math::abs(A[0][1])),
       stk::math::max(stk::math::abs(A[0][2]), stk::math::abs(A[1][0]))),
     stk::math::max(
-      stk::math::max(stk::math::abs(A[1][1]), stk::math::abs(A[1][2])),
+      stk::math::max(stk::math::abs(centeredA11), stk::math::abs(A[1][2])),
       stk::math::max(stk::math::abs(A[2][0]), stk::math::abs(A[2][1]))));
-  const T matrixScale = stk::math::max(maxAbsA, stk::math::abs(A[2][2]));
-  const T linCoefScale = matrixScale * matrixScale;
+  const T centeredScale =
+    stk::math::max(maxAbsCenteredA, stk::math::abs(centeredA22));
+  const T linCoefScale = centeredScale * centeredScale;
   const auto linCoefTiny = stk::math::abs(linCoef) <=
                            T(std::numeric_limits<double>::epsilon()) *
                              linCoefScale;
@@ -397,7 +407,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
       T(-1.0))) /
     3.0;
   const T amp = 2.0 * stk::math::sqrt(-linCoefSafe / 3.0);
-  const T tDegen = -stk::math::cbrt(constCoef);
+  const T tDegen = T(0.0);
   const T t1 =
     stk::math::if_then_else(linCoefTiny, tDegen, amp * stk::math::cos(phi));
   const T t2 =
