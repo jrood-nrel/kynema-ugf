@@ -202,6 +202,51 @@ TEST(TestEigen, testgeneraleigenvaluesdistinctrealroots)
   }
 }
 
+TEST(TestEigen, testgeneraleigenvaluesmixedlanes_simd)
+{
+  DoubleType A[3][3], Q[3][3], D[3][3];
+
+  for (unsigned lane = 0; lane < stk::simd::ndoubles; ++lane) {
+    if (lane % 2 == 0) {
+      A[0][0][lane] = 0.0;
+      A[1][1][lane] = 0.0;
+      A[2][2][lane] = 0.0;
+    }
+    else {
+      A[0][0][lane] = -1.0e-151;
+      A[1][1][lane] = 0.0;
+      A[2][2][lane] = 1.0e-151;
+    }
+    A[0][1][lane] = 0.0;
+    A[0][2][lane] = 0.0;
+    A[1][0][lane] = 0.0;
+    A[1][2][lane] = 0.0;
+    A[2][0][lane] = 0.0;
+    A[2][1][lane] = 0.0;
+  }
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (unsigned lane = 0; lane < stk::simd::ndoubles; ++lane) {
+    std::array<double, 3> eigenvalues = {
+      stk::simd::get_data(D[0][0], lane),
+      stk::simd::get_data(D[1][1], lane),
+      stk::simd::get_data(D[2][2], lane)};
+    std::sort(eigenvalues.begin(), eigenvalues.end());
+
+    if (lane % 2 == 0) {
+      EXPECT_DOUBLE_EQ(eigenvalues[0], 0.0);
+      EXPECT_DOUBLE_EQ(eigenvalues[1], 0.0);
+      EXPECT_DOUBLE_EQ(eigenvalues[2], 0.0);
+    }
+    else {
+      EXPECT_NEAR(eigenvalues[0], -1.0e-151, 1.0e-163);
+      EXPECT_NEAR(eigenvalues[1], 0.0, 1.0e-300);
+      EXPECT_NEAR(eigenvalues[2], 1.0e-151, 1.0e-163);
+    }
+  }
+}
+
 // SIMD tests
 
 // This tests whether the correct eigenvalues are obtained

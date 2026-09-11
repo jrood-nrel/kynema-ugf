@@ -369,11 +369,22 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T constCoef = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
 
   // linCoef == 0 means the depressed cubic is t^3 + constCoef == 0 with a
-  // repeated root. Use an absolute tiny threshold so only the true/underflow
-  // degenerate case takes this path, preserving behavior for well-conditioned
-  // inputs while avoiding divide-by-zero/FPE for matrices such as A == 0.
-  const auto linCoefTiny = stk::math::abs(linCoef) < T(1.0e-300);
-  const T linCoefSafe = stk::math::if_then_else(linCoefTiny, T(-1.0), linCoef);
+  // repeated root. Detect that condition relative to matrix scale so small but
+  // nondegenerate inputs do not get misclassified.
+  const T maxAbsA = stk::math::max(
+    stk::math::max(
+      stk::math::max(stk::math::abs(A[0][0]), stk::math::abs(A[0][1])),
+      stk::math::max(stk::math::abs(A[0][2]), stk::math::abs(A[1][0]))),
+    stk::math::max(
+      stk::math::max(stk::math::abs(A[1][1]), stk::math::abs(A[1][2])),
+      stk::math::max(stk::math::abs(A[2][0]), stk::math::abs(A[2][1]))));
+  const T matrixScale = stk::math::max(maxAbsA, stk::math::abs(A[2][2]));
+  const T linCoefScale = stk::math::max(matrixScale * matrixScale, T(1.0));
+  const auto linCoefTiny = stk::math::abs(linCoef) <
+                           T(std::numeric_limits<double>::epsilon()) *
+                             linCoefScale;
+  const T linCoefSafe =
+    stk::math::if_then_else(linCoefTiny, -linCoefScale, linCoef);
 
   // Solve roots of depressed cubic polynomial analytically (Francois Viete
   // formula)
