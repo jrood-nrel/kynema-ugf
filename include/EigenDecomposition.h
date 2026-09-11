@@ -369,8 +369,9 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T constCoef = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
 
   // linCoef == 0 means the depressed cubic is t^3 + constCoef == 0 with a
-  // repeated root. Guard the denominator in the trigonometric form to avoid
-  // divide-by-zero/FPE for degenerate matrices (e.g. A == 0).
+  // repeated root. Use an absolute tiny threshold so only the true/underflow
+  // degenerate case takes this path, preserving behavior for well-conditioned
+  // inputs while avoiding divide-by-zero/FPE for matrices such as A == 0.
   const auto linCoefTiny = stk::math::abs(linCoef) < T(1.0e-300);
   const T linCoefSafe = stk::math::if_then_else(linCoefTiny, T(-1.0), linCoef);
 
