@@ -14,7 +14,6 @@
 #include "node_kernels/SDRSSTAMSNodeKernel.h"
 #include "node_kernels/TKESSTAMSNodeKernel.h"
 #include "node_kernels/MomentumSSTAMSForcingNodeKernel.h"
-#include <cmath>
 
 #include <cmath>
 
