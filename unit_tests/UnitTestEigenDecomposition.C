@@ -181,6 +181,47 @@ TEST(TestEigen, testgeneraleigenvaluestriplenonzeroeigenvalue)
   }
 }
 
+TEST(TestEigen, testgeneraleigenvaluestriplerootroundingstable)
+{
+  constexpr double c = 0.1;
+  double A[3][3] = {
+    {c, 0.0, 0.0},
+    {0.0, c, 0.0},
+    {0.0, 0.0, c},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_NEAR(D[j][j], c, 1.0e-14);
+    EXPECT_TRUE(std::isfinite(D[j][j]));
+  }
+}
+
+TEST(TestEigen, testgeneraleigenvaluesverysmallfinitespectrum)
+{
+  double A[3][3] = {
+    {-1.0e-154, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 1.0e-154},
+  };
+  double Q[3][3], D[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q, D);
+
+  std::array<double, 3> eigenvalues = {D[0][0], D[1][1], D[2][2]};
+  std::sort(eigenvalues.begin(), eigenvalues.end());
+
+  EXPECT_NEAR(eigenvalues[0], -1.0e-154, 1.0e-166);
+  EXPECT_NEAR(eigenvalues[1], 0.0, 1.0e-300);
+  EXPECT_NEAR(eigenvalues[2], 1.0e-154, 1.0e-166);
+
+  for (unsigned j = 0; j < 3; ++j) {
+    EXPECT_TRUE(std::isfinite(eigenvalues[j]));
+  }
+}
+
 TEST(TestEigen, testgeneraleigenvaluestranslationinvariantthreshold)
 {
   double A[3][3] = {

@@ -331,19 +331,45 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   // Characteristic equation for A is ax^3 + bx^2 + cx + d = 0 where x are the
   // eigenvalues and a = 1, b = -trA, c = coFacA, d = -detA
   const T trA = A[0][0] + A[1][1] + A[2][2];
-  const T detA = A[0][0] * A[1][1] * A[2][2] + A[0][1] * A[1][2] * A[2][0] +
-                 A[0][2] * A[1][0] * A[2][1] - A[0][0] * A[1][2] * A[2][1] -
-                 A[0][1] * A[1][0] * A[2][2] - A[0][2] * A[1][1] * A[2][0];
-  const T coFacA = A[0][0] * A[1][1] - A[0][1] * A[1][0] + A[1][1] * A[2][2] -
-                   A[1][2] * A[2][1] + A[0][0] * A[2][2] - A[0][2] * A[2][0];
+  // Convert to depressed cubic (substitute x = t - b/3a = t + trA/3).
+  // Form the shifted matrix explicitly so the depressed cubic coefficients
+  // are translation invariant and remain well-scaled for large traces.
+  const T trThird = trA / 3.0;
+  const T centeredA00 = (A[0][0] - A[1][1] + A[0][0] - A[2][2]) / 3.0;
+  const T centeredA11 = (A[1][1] - A[0][0] + A[1][1] - A[2][2]) / 3.0;
+  const T centeredA22 = -centeredA00 - centeredA11;
+  const T centeredScale = stk::math::max(
+    stk::math::max(stk::math::abs(centeredA00), stk::math::abs(centeredA11)),
+    stk::math::max(
+      stk::math::max(stk::math::abs(centeredA22), stk::math::abs(A[0][1])),
+      stk::math::max(
+        stk::math::max(stk::math::abs(A[0][2]), stk::math::abs(A[1][0])),
+        stk::math::max(
+          stk::math::max(stk::math::abs(A[1][2]), stk::math::abs(A[2][0])),
+          stk::math::abs(A[2][1])))));
+  const auto centeredScaleTiny = centeredScale == T(0.0);
+  const T centeredScaleSafe =
+    stk::math::if_then_else(centeredScaleTiny, T(1.0), centeredScale);
 
-  // Check to make sure all eigenvalues are real
-  // discriminant = (bc)^2 - 4ac^3 -4b^3d -27a^2d^2 + 18abcd where
-  // a = 1, b = -trA, c = coFacA, d = -detA
-  const T disc = trA * trA * coFacA * coFacA - 4.0 * coFacA * coFacA * coFacA -
-                 4.0 * trA * trA * trA * detA - 27.0 * detA * detA +
-                 18.0 * trA * coFacA * detA;
+  const T c00 = centeredA00 / centeredScaleSafe;
+  const T c11 = centeredA11 / centeredScaleSafe;
+  const T c22 = centeredA22 / centeredScaleSafe;
+  const T c01 = A[0][1] / centeredScaleSafe;
+  const T c02 = A[0][2] / centeredScaleSafe;
+  const T c10 = A[1][0] / centeredScaleSafe;
+  const T c12 = A[1][2] / centeredScaleSafe;
+  const T c20 = A[2][0] / centeredScaleSafe;
+  const T c21 = A[2][1] / centeredScaleSafe;
 
+  const T p =
+    c00 * c11 - c01 * c10 + c11 * c22 - c12 * c21 + c00 * c22 - c02 * c20;
+  const T q =
+    -(c00 * c11 * c22 + c01 * c12 * c20 + c02 * c10 * c21 - c00 * c12 * c21 -
+      c01 * c10 * c22 - c02 * c11 * c20);
+
+  // Check to make sure all eigenvalues are real using normalized depressed
+  // cubic coefficients: t^3 + p t + q = 0.
+  const T disc = -4.0 * p * p * p - 27.0 * q * q;
   const auto check_one = disc < -machEps;
   const bool exit_now = stk::simd::are_all(check_one);
   if (exit_now) {
@@ -362,48 +388,32 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 #endif
   }
 
-  // Convert to depressed cubic (substitute x = t - b/3a = t + trA/3).
-  // Form the shifted matrix explicitly so the depressed cubic coefficients
-  // are translation invariant and remain well-scaled for large traces.
-  const T trThird = trA / 3.0;
-  const T centeredA00 = A[0][0] - trThird;
-  const T centeredA11 = A[1][1] - trThird;
-  const T centeredA22 = A[2][2] - trThird;
-  const T linCoef =
-    centeredA00 * centeredA11 - A[0][1] * A[1][0] +
-    centeredA11 * centeredA22 - A[1][2] * A[2][1] +
-    centeredA00 * centeredA22 - A[0][2] * A[2][0];
-  const T constCoef =
-    -(centeredA00 * centeredA11 * centeredA22 + A[0][1] * A[1][2] * A[2][0] +
-      A[0][2] * A[1][0] * A[2][1] - centeredA00 * A[1][2] * A[2][1] -
-      A[0][1] * A[1][0] * centeredA22 - A[0][2] * centeredA11 * A[2][0]);
-
-  // Only the exactly zero coefficient needs a fallback; preserve every
-  // nonzero depressed-cubic coefficient regardless of the matrix norm.
-  const auto linCoefTiny = linCoef == T(0.0);
-  const T linCoefSafe =
-    stk::math::if_then_else(linCoefTiny, T(-1.0), linCoef);
+  // Only the exactly zero normalized p coefficient needs a fallback.
+  const auto pTiny = p == T(0.0);
+  const T pSafe = stk::math::if_then_else(pTiny, T(-1.0), p);
 
   // Solve roots of depressed cubic polynomial analytically (Francois Viete
   // formula)
-  const T phi =
+  const T phiNorm =
     stk::math::acos(stk::math::max(
       stk::math::min(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoefSafe) /
-          (2.0 * linCoefSafe),
+        3.0 * q * stk::math::sqrt(-3.0 / pSafe) / (2.0 * pSafe),
         T(1.0)),
       T(-1.0))) /
     3.0;
-  const T amp = 2.0 * stk::math::sqrt(-linCoefSafe / 3.0);
+  const T ampNorm = 2.0 * stk::math::sqrt(-pSafe / 3.0);
   const T tDegen = T(0.0);
-  const T t1 =
-    stk::math::if_then_else(linCoefTiny, tDegen, amp * stk::math::cos(phi));
-  const T t2 =
+  const T t1Norm =
+    stk::math::if_then_else(pTiny, tDegen, ampNorm * stk::math::cos(phiNorm));
+  const T t2Norm =
     stk::math::if_then_else(
-      linCoefTiny, tDegen, amp * stk::math::cos(phi - 2.0 * pi / 3.0));
-  const T t3 =
+      pTiny, tDegen, ampNorm * stk::math::cos(phiNorm - 2.0 * pi / 3.0));
+  const T t3Norm =
     stk::math::if_then_else(
-      linCoefTiny, tDegen, amp * stk::math::cos(phi - 4.0 * pi / 3.0));
+      pTiny, tDegen, ampNorm * stk::math::cos(phiNorm - 4.0 * pi / 3.0));
+  const T t1 = t1Norm * centeredScaleSafe;
+  const T t2 = t2Norm * centeredScaleSafe;
+  const T t3 = t3Norm * centeredScaleSafe;
 
   // Convert roots of depressed polynomial back to the eigenvalues
   D[0][0] = t1 + trA / 3.0;
