@@ -418,6 +418,8 @@ TEST_F(AMSKernelHex8Mesh, NGP_ams_forcing_finite_at_limits)
 
   helperObjs.execute();
 
-  for (unsigned i = 0; i < helperObjs.linsys->rhs_.extent(0); ++i)
-    ASSERT_TRUE(std::isfinite(helperObjs.linsys->rhs_(i)));
+  auto rhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->rhs_);
+  for (unsigned i = 0; i < rhsHost.extent(0); ++i)
+    ASSERT_TRUE(std::isfinite(rhsHost(i)));
 }
