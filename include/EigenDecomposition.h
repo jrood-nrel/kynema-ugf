@@ -361,7 +361,8 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   // Check to make sure all eigenvalues are real using normalized depressed
   // cubic coefficients: t^3 + p t + q = 0.
   const T disc = -4.0 * p * p * p - 27.0 * q * q;
-  const T discTol = 64.0 * machEps;
+  const T discMag = 4.0 * stk::math::abs(p * p * p) + 27.0 * stk::math::abs(q * q);
+  const T discTol = 64.0 * machEps * (discMag + T(1.0));
   const auto check_one = disc < -discTol;
   const bool exit_now = stk::simd::are_all(check_one);
   if (exit_now) {
