@@ -142,7 +142,7 @@ MomentumSSTAMSForcingNodeKernel::execute(
 
   const NodeKernelTraits::DblType eps = betaStar_ * tke * sdr;
   const NodeKernelTraits::DblType minDenom =
-    std::numeric_limits<NodeKernelTraits::DblType>::min();
+    std::numeric_limits<NodeKernelTraits::DblType>::epsilon();
   const NodeKernelTraits::DblType rhoSafe = stk::math::max(rho, minDenom);
   const NodeKernelTraits::DblType epsSafe = stk::math::max(eps, minDenom);
 
