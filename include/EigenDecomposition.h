@@ -378,21 +378,9 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
       A[0][2] * A[1][0] * A[2][1] - centeredA00 * A[1][2] * A[2][1] -
       A[0][1] * A[1][0] * centeredA22 - A[0][2] * centeredA11 * A[2][0]);
 
-  // linCoef depends only on the trace-shifted matrix, so detect the repeated
-  // root condition relative to that translation-invariant scale.
-  const T maxAbsCenteredA = stk::math::max(
-    stk::math::max(
-      stk::math::max(stk::math::abs(centeredA00), stk::math::abs(A[0][1])),
-      stk::math::max(stk::math::abs(A[0][2]), stk::math::abs(A[1][0]))),
-    stk::math::max(
-      stk::math::max(stk::math::abs(centeredA11), stk::math::abs(A[1][2])),
-      stk::math::max(stk::math::abs(A[2][0]), stk::math::abs(A[2][1]))));
-  const T centeredScale =
-    stk::math::max(maxAbsCenteredA, stk::math::abs(centeredA22));
-  const T linCoefScale = centeredScale * centeredScale;
-  const auto linCoefTiny = stk::math::abs(linCoef) <=
-                           T(std::numeric_limits<double>::epsilon()) *
-                             linCoefScale;
+  // Only the exactly zero coefficient needs a fallback; preserve every
+  // nonzero depressed-cubic coefficient regardless of the matrix norm.
+  const auto linCoefTiny = linCoef == T(0.0);
   const T linCoefSafe =
     stk::math::if_then_else(linCoefTiny, T(-1.0), linCoef);
 
