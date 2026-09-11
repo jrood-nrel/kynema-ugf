@@ -326,7 +326,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 {
 
   const T pi = stk::math::acos(-1.0);
-  const T machEps = std::numeric_limits<T>::min();
+  const T machEps = std::numeric_limits<T>::epsilon();
 
   // Characteristic equation for A is ax^3 + bx^2 + cx + d = 0 where x are the
   // eigenvalues and a = 1, b = -trA, c = coFacA, d = -detA
@@ -361,7 +361,8 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   // Check to make sure all eigenvalues are real using normalized depressed
   // cubic coefficients: t^3 + p t + q = 0.
   const T disc = -4.0 * p * p * p - 27.0 * q * q;
-  const auto check_one = disc < -machEps;
+  const T discTol = 64.0 * machEps;
+  const auto check_one = disc < -discTol;
   const bool exit_now = stk::simd::are_all(check_one);
   if (exit_now) {
 #if !defined(KOKKOS_ENABLE_GPU)
@@ -381,14 +382,18 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 
   // Only the exactly zero normalized p coefficient needs a fallback.
   const auto pTiny = p == T(0.0);
-  const T pSafe = stk::math::if_then_else(pTiny, T(-1.0), p);
+  const auto pNonPositive = p <= T(0.0);
+  const auto vieteSafe = (!check_one) && pNonPositive;
+  const T pSafe = stk::math::if_then_else(
+    vieteSafe, stk::math::if_then_else(pTiny, T(-1.0), p), T(-1.0));
+  const T qSafe = stk::math::if_then_else(vieteSafe, q, T(0.0));
 
   // Solve roots of depressed cubic polynomial analytically (Francois Viete
   // formula)
   const T phiNorm =
     stk::math::acos(stk::math::max(
       stk::math::min(
-        3.0 * q * stk::math::sqrt(-3.0 / pSafe) / (2.0 * pSafe),
+        3.0 * qSafe * stk::math::sqrt(-3.0 / pSafe) / (2.0 * pSafe),
         T(1.0)),
       T(-1.0))) /
     3.0;
