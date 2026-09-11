@@ -379,12 +379,12 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
       stk::math::max(stk::math::abs(A[1][1]), stk::math::abs(A[1][2])),
       stk::math::max(stk::math::abs(A[2][0]), stk::math::abs(A[2][1]))));
   const T matrixScale = stk::math::max(maxAbsA, stk::math::abs(A[2][2]));
-  const T linCoefScale = stk::math::max(matrixScale * matrixScale, T(1.0));
-  const auto linCoefTiny = stk::math::abs(linCoef) <
+  const T linCoefScale = matrixScale * matrixScale;
+  const auto linCoefTiny = stk::math::abs(linCoef) <=
                            T(std::numeric_limits<double>::epsilon()) *
                              linCoefScale;
   const T linCoefSafe =
-    stk::math::if_then_else(linCoefTiny, -linCoefScale, linCoef);
+    stk::math::if_then_else(linCoefTiny, T(-1.0), linCoef);
 
   // Solve roots of depressed cubic polynomial analytically (Francois Viete
   // formula)
