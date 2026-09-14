@@ -51,12 +51,13 @@ get_M43_constant(T D[dim][dim], const double CMdeg)
   middleEV = middleEV / smallestEV;
   largestEV = largestEV / smallestEV;
 
-  T r =
-    stk::math::sqrt(stk::math::pow(middleEV, 2) + stk::math::pow(largestEV, 2));
-  T theta = stk::math::acos(largestEV / r);
+  const T middleSq = middleEV * middleEV;
+  const T largestSq = largestEV * largestEV;
+  const T r = stk::math::sqrt(middleSq + largestSq);
+  const T sinTwoTheta = (T(2.0) * middleEV * largestEV) / (middleSq + largestSq);
 
   T x = stk::math::log(r);
-  T y = stk::math::log(stk::math::sin(2.0 * theta));
+  T y = stk::math::log(sinTwoTheta);
 
   T poly = c[0] + c[1] * x + c[2] * y + c[3] * x * x + c[4] * x * y +
            c[5] * y * y + c[6] * x * x * x + c[7] * x * x * y +
