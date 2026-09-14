@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <algorithm>
+#include <cmath>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -66,6 +68,55 @@ DoubleType A3d_rand_simd[3][3];
 DoubleType A3d_fixed_simd[3][3];
 DoubleType A2d_rand_simd[2][2];
 DoubleType A2d_fixed_simd[2][2];
+
+double
+max_abs_entry(const double (&A)[3][3])
+{
+  double maxAbs = 0.0;
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      maxAbs = std::max(maxAbs, std::abs(A[i][j]));
+    }
+  }
+  return maxAbs;
+}
+
+void
+expect_finite_real_roots(const double (&A)[3][3], const double (&D)[3][3])
+{
+  const double trA = A[0][0] + A[1][1] + A[2][2];
+  const double detA = A[0][0] * A[1][1] * A[2][2] +
+                      A[0][1] * A[1][2] * A[2][0] +
+                      A[0][2] * A[1][0] * A[2][1] -
+                      A[0][0] * A[1][2] * A[2][1] -
+                      A[0][1] * A[1][0] * A[2][2] -
+                      A[0][2] * A[1][1] * A[2][0];
+  const double coFacA = A[0][0] * A[1][1] - A[0][1] * A[1][0] +
+                        A[1][1] * A[2][2] - A[1][2] * A[2][1] +
+                        A[0][0] * A[2][2] - A[0][2] * A[2][0];
+
+  const double matrixScale = std::max(max_abs_entry(A), 1.0);
+  const double polyTol = 1.0e-10 * matrixScale * matrixScale * matrixScale;
+  const double traceTol = 1.0e-10 * matrixScale;
+
+  double traceEval = 0.0;
+  for (int i = 0; i < 3; ++i) {
+    const double eig = D[i][i];
+    EXPECT_TRUE(std::isfinite(eig));
+    const double residual =
+      eig * eig * eig - trA * eig * eig + coFacA * eig - detA;
+    EXPECT_NEAR(residual, 0.0, polyTol);
+    traceEval += eig;
+  }
+
+  EXPECT_NEAR(traceEval, trA, traceTol);
+  EXPECT_DOUBLE_EQ(D[0][1], 0.0);
+  EXPECT_DOUBLE_EQ(D[0][2], 0.0);
+  EXPECT_DOUBLE_EQ(D[1][0], 0.0);
+  EXPECT_DOUBLE_EQ(D[1][2], 0.0);
+  EXPECT_DOUBLE_EQ(D[2][0], 0.0);
+  EXPECT_DOUBLE_EQ(D[2][1], 0.0);
+}
 
 } // namespace
 
@@ -274,6 +325,7 @@ TEST(TestEigen, testeigendecompandreconstruct2d_simd)
       A2d_rand_simd[1][1][j] = b22 * (j + 1);
     }
   }
+
   A2d_rand_simd[1][0] = A2d_rand_simd[0][1];
 
   sierra::kynema_ugf::EigenDecomposition::sym_diagonalize(
@@ -293,5 +345,52 @@ TEST(TestEigen, testeigendecompandreconstruct2d_simd)
           stk::simd::get_data(A2d_rand_simd[i][j], is), tol);
       }
     }
+  }
+}
+
+TEST(TestEigen, testgeneraleigenvalues_robust_cases)
+{
+  double Q_[3][3], D_[3][3];
+
+  const double zero[3][3] = {
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+  };
+
+  const double tripleRoot[3][3] = {
+    {7.0, 0.0, 0.0},
+    {0.0, 7.0, 0.0},
+    {0.0, 0.0, 7.0},
+  };
+
+  const double doubleRoot[3][3] = {
+    {2.0, 0.0, 0.0},
+    {0.0, 2.0, 0.0},
+    {0.0, 0.0, 5.0},
+  };
+
+  const double nearZero[3][3] = {
+    {2.0e-20, -1.0e-20, 5.0e-21},
+    {-1.0e-20, 2.0e-20, 2.5e-21},
+    {5.0e-21, 2.5e-21, 1.5e-20},
+  };
+
+  const double nearLarge[3][3] = {
+    {2.0e20, -1.0e20, 5.0e19},
+    {-1.0e20, 2.0e20, 2.5e19},
+    {5.0e19, 2.5e19, 1.5e20},
+  };
+
+  double A[3][3];
+  const double (*cases[])[3] = {
+    zero, tripleRoot, doubleRoot, nearZero, nearLarge};
+  for (const auto& testCase : cases) {
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 3; ++j)
+        A[i][j] = testCase[i][j];
+
+    sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
+    expect_finite_real_roots(A, D_);
   }
 }

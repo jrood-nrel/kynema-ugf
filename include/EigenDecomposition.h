@@ -13,6 +13,11 @@
 #include <FieldTypeDef.h>
 #include <SimdInterface.h>
 #include <KynemaUGFEnv.h>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 namespace sierra {
 namespace kynema_ugf {
@@ -324,81 +329,62 @@ template <class T>
 KOKKOS_FUNCTION void
 general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 {
-
-  const T pi = stk::math::acos(-1.0);
-  const T machEps = std::numeric_limits<T>::min();
-
-  // Characteristic equation for A is ax^3 + bx^2 + cx + d = 0 where x are the
-  // eigenvalues and a = 1, b = -trA, c = coFacA, d = -detA
-  const T trA = A[0][0] + A[1][1] + A[2][2];
-  const T detA = A[0][0] * A[1][1] * A[2][2] + A[0][1] * A[1][2] * A[2][0] +
-                 A[0][2] * A[1][0] * A[2][1] - A[0][0] * A[1][2] * A[2][1] -
-                 A[0][1] * A[1][0] * A[2][2] - A[0][2] * A[1][1] * A[2][0];
-  const T coFacA = A[0][0] * A[1][1] - A[0][1] * A[1][0] + A[1][1] * A[2][2] -
-                   A[1][2] * A[2][1] + A[0][0] * A[2][2] - A[0][2] * A[2][0];
-
-  // Check to make sure all eigenvalues are real
-  // discriminant = (bc)^2 - 4ac^3 -4b^3d -27a^2d^2 + 18abcd where
-  // a = 1, b = -trA, c = coFacA, d = -detA
-  const T disc = trA * trA * coFacA * coFacA - 4.0 * coFacA * coFacA * coFacA -
-                 4.0 * trA * trA * trA * detA - 27.0 * detA * detA +
-                 18.0 * trA * coFacA * detA;
-
-  const auto check_one = disc < -machEps;
-  const bool exit_now = stk::simd::are_all(check_one);
-  if (exit_now) {
-#if !defined(KOKKOS_ENABLE_GPU)
-    KynemaUGFEnv::self().kynema_ugfOutput()
-      << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
-      << disc << "([[" << A[0][0] << "," << A[0][1] << "," << A[0][2] << "],["
-      << A[1][0] << "," << A[1][1] << "," << A[1][2] << "],[" << A[2][0] << ","
-      << A[2][1] << "," << A[2][2] << "]])" << std::endl;
-    throw std::runtime_error(
-      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
-
-#else
-    ThrowErrorMsgDevice(
-      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
-#endif
-  }
-
-  // Convert to depressed cubic (substitute x = t - b/3a = t + trA/3)
-  // This leads to cubic: t^3 + pt + q  where the linear and constant
-  // coefficient are defined as below
-  const T linCoef = coFacA - trA * trA / 3.0;
-  const T constCoef = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
-
-  // Solve roots of depressed cubic polynomial analytically (Francois Viete
-  // formula)
-  const T t1 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-      3.0);
-  const T t2 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-        3.0 -
-      2.0 * pi / 3.0);
-  const T t3 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-        3.0 -
-      4.0 * pi / 3.0);
-
-  // Convert roots of depressed polynomial back to the eigenvalues
-  D[0][0] = t1 + trA / 3.0;
-  D[1][1] = t2 + trA / 3.0;
-  D[2][2] = t3 + trA / 3.0;
+  const T pi = T(M_PI);
 
   // Zero out Q since this only returns eigenvalues
   Q[0][0] = Q[0][1] = Q[0][2] = Q[1][0] = Q[1][1] = Q[1][2] = Q[2][0] =
     Q[2][1] = Q[2][2] = 0.0;
+
+  // Scale the matrix so invariant-based cubic coefficients are O(1)
+  T scale = T(0.0);
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      scale = stk::math::max(scale, stk::math::abs(A[i][j]));
+    }
+  }
+
+  const T scaleSafe = stk::math::if_then_else(scale == T(0.0), T(1.0), scale);
+  const T invScale = T(1.0) / scaleSafe;
+
+  T B[3][3];
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      B[i][j] = A[i][j] * invScale;
+    }
+  }
+
+  const T trA = B[0][0] + B[1][1] + B[2][2];
+  const T detA = B[0][0] * B[1][1] * B[2][2] + B[0][1] * B[1][2] * B[2][0] +
+                 B[0][2] * B[1][0] * B[2][1] - B[0][0] * B[1][2] * B[2][1] -
+                 B[0][1] * B[1][0] * B[2][2] - B[0][2] * B[1][1] * B[2][0];
+  const T coFacA = B[0][0] * B[1][1] - B[0][1] * B[1][0] + B[1][1] * B[2][2] -
+                   B[1][2] * B[2][1] + B[0][0] * B[2][2] - B[0][2] * B[2][0];
+
+  // depressed cubic t^3 + p t + q
+  const T p = coFacA - trA * trA / 3.0;
+  const T q = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
+
+  const T tol = T(1.0e-12);
+  const auto degenerate = (stk::math::abs(p) < tol) | (p > T(0.0));
+  const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
+
+  const T r = stk::math::sqrt(stk::math::max(-pSafe / 3.0, T(0.0)));
+  T arg =
+    3.0 * q * stk::math::sqrt(stk::math::max(-3.0 / pSafe, T(0.0))) /
+    (2.0 * pSafe);
+  arg = stk::math::min(stk::math::max(arg, T(-1.0)), T(1.0));
+
+  const T phi = stk::math::acos(arg) / 3.0;
+
+  const T t1 = 2.0 * r * stk::math::cos(phi);
+  const T t2 = 2.0 * r * stk::math::cos(phi - 2.0 * pi / 3.0);
+  const T t3 = 2.0 * r * stk::math::cos(phi - 4.0 * pi / 3.0);
+
+  const T shift = trA / 3.0;
+  D[0][0] = stk::math::if_then_else(degenerate, shift, t1 + shift) * scale;
+  D[1][1] = stk::math::if_then_else(degenerate, shift, t2 + shift) * scale;
+  D[2][2] = stk::math::if_then_else(degenerate, shift, t3 + shift) * scale;
+  D[0][1] = D[0][2] = D[1][0] = D[1][2] = D[2][0] = D[2][1] = T(0.0);
 }
 
 } // namespace EigenDecomposition
