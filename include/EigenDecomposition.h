@@ -364,34 +364,17 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T p = coFacA - trA * trA / 3.0;
   const T q = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
 
-  const T disc = -(4.0 * p * p * p + 27.0 * q * q);
-  const T discScale = 4.0 * stk::math::abs(p * p * p) + 27.0 * q * q;
-  const T discTol = T(1.0e-12) * discScale;
-
-  const auto check_one = disc < -discTol;
-  const bool exit_now = stk::simd::are_all(check_one);
-  if (exit_now) {
-#if !defined(KOKKOS_ENABLE_GPU)
-    KynemaUGFEnv::self().kynema_ugfOutput()
-      << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
-      << disc << "([[" << A[0][0] << "," << A[0][1] << "," << A[0][2] << "],["
-      << A[1][0] << "," << A[1][1] << "," << A[1][2] << "],[" << A[2][0] << ","
-      << A[2][1] << "," << A[2][2] << "]])" << std::endl;
-    throw std::runtime_error(
-      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
-#else
-    ThrowErrorMsgDevice(
-      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
-#endif
-  }
-
   const T pTol = T(16.0) * T(std::numeric_limits<double>::epsilon()) *
                  (stk::math::abs(coFacA) + stk::math::abs(trA * trA / 3.0));
-  const auto degenerate = stk::math::abs(p) <= pTol;
+  const T qAbs = stk::math::abs(q);
+  const T qTol = T(16.0) * T(std::numeric_limits<double>::epsilon()) *
+                 (stk::math::abs(coFacA * trA / 3.0) +
+                  stk::math::abs(2.0 * trA * trA * trA / 27.0) +
+                  stk::math::abs(detA));
+  const auto degenerate = (stk::math::abs(p) <= pTol) & (qAbs <= qTol);
   const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
 
   const T r = stk::math::sqrt(stk::math::max(-pSafe / 3.0, T(0.0)));
-  const T qAbs = stk::math::abs(q);
   const T qAbsSafe = stk::math::if_then_else(qAbs == T(0.0), T(1.0), qAbs);
   const T qSign = q / qAbsSafe;
   const T rSafe = stk::math::if_then_else(r > T(0.0), r, T(1.0));
@@ -399,6 +382,27 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
                    T(3.0) * stk::math::log(rSafe);
   const T argMag =
     stk::math::exp(stk::math::min(argLog, T(709.78271289338397)));
+  const auto check_one =
+    ((p > pTol) | ((p >= -pTol) & (qAbs > qTol))) |
+    ((p < -pTol) & (qAbs > qTol) &
+     (argMag >
+      T(1.0) + T(16.0) * T(std::numeric_limits<double>::epsilon())));
+  const bool exit_now = stk::simd::are_all(check_one & (!degenerate));
+  if (exit_now) {
+#if !defined(KOKKOS_ENABLE_GPU)
+    KynemaUGFEnv::self().kynema_ugfOutput()
+      << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
+      << " p=" << p << " q=" << q << "([[" << A[0][0] << "," << A[0][1] << ","
+      << A[0][2] << "],[" << A[1][0] << "," << A[1][1] << "," << A[1][2]
+      << "],[" << A[2][0] << "," << A[2][1] << "," << A[2][2] << "]])"
+      << std::endl;
+    throw std::runtime_error(
+      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+#else
+    ThrowErrorMsgDevice(
+      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+#endif
+  }
   T arg = -qSign * argMag;
   arg = stk::math::min(stk::math::max(arg, T(-1.0)), T(1.0));
 

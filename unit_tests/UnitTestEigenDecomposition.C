@@ -435,6 +435,19 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
   EXPECT_THROW(
     sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_),
     std::runtime_error);
+
+  const double tinyComplexPair[3][3] = {
+    {0.0, 0.0, -1.0e-200},
+    {1.0, 0.0, 0.0},
+    {0.0, 1.0, 0.0},
+  };
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      A[i][j] = tinyComplexPair[i][j];
+
+  EXPECT_THROW(
+    sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_),
+    std::runtime_error);
 }
 
 TEST(TestAMSUtils, testgetm43constant_finite_for_subnormal_spectrum)
