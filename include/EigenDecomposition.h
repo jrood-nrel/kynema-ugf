@@ -392,6 +392,75 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
     C[i][i] -= shift;
   }
 
+#if !defined(KOKKOS_ENABLE_GPU)
+  if constexpr (std::is_floating_point_v<T>) {
+    using Wide = long double;
+    const Wide c00 = static_cast<Wide>(C[0][0]);
+    const Wide c01 = static_cast<Wide>(C[0][1]);
+    const Wide c02 = static_cast<Wide>(C[0][2]);
+    const Wide c10 = static_cast<Wide>(C[1][0]);
+    const Wide c11 = static_cast<Wide>(C[1][1]);
+    const Wide c12 = static_cast<Wide>(C[1][2]);
+    const Wide c20 = static_cast<Wide>(C[2][0]);
+    const Wide c21 = static_cast<Wide>(C[2][1]);
+    const Wide c22 = static_cast<Wide>(C[2][2]);
+
+    const Wide p = c00 * c11 - c01 * c10 + c11 * c22 - c12 * c21 +
+                   c00 * c22 - c02 * c20;
+    const Wide q = -(c00 * c11 * c22 + c01 * c12 * c20 + c02 * c10 * c21 -
+                     c00 * c12 * c21 - c01 * c10 * c22 - c02 * c11 * c20);
+    const Wide pTol = Wide(16.0L) * Wide(std::numeric_limits<double>::epsilon()) *
+                      (std::abs(c00 * c11) + std::abs(c01 * c10) +
+                       std::abs(c11 * c22) + std::abs(c12 * c21) +
+                       std::abs(c00 * c22) + std::abs(c02 * c20));
+    const Wide qAbs = std::abs(q);
+    const Wide qTol = Wide(16.0L) * Wide(std::numeric_limits<double>::epsilon()) *
+                      (std::abs(c00 * c11 * c22) + std::abs(c01 * c12 * c20) +
+                       std::abs(c02 * c10 * c21) + std::abs(c00 * c12 * c21) +
+                       std::abs(c01 * c10 * c22) + std::abs(c02 * c11 * c20));
+
+    const bool degenerate = (std::abs(p) <= pTol) && (qAbs <= qTol);
+    const Wide pSafe = degenerate ? Wide(-1.0L) : p;
+    const Wide r = std::sqrt(std::max(-pSafe / Wide(3.0L), Wide(0.0L)));
+    const Wide qAbsSafe = (qAbs == Wide(0.0L)) ? Wide(1.0L) : qAbs;
+    const Wide qSign = q / qAbsSafe;
+    const Wide rSafe = (r > Wide(0.0L)) ? r : Wide(1.0L);
+    const Wide argLog = std::log(qAbsSafe) - Wide(0.69314718055994530942L) -
+                        Wide(3.0L) * std::log(rSafe);
+    const Wide argMag = std::exp(std::min(
+      argLog, std::log(std::numeric_limits<Wide>::max())));
+    const bool check_one =
+      ((p > pTol) || ((p >= -pTol) && (qAbs > qTol))) ||
+      ((p < -pTol) && (qAbs > qTol) &&
+       (argMag > Wide(1.0L) + Wide(16.0L) *
+                             Wide(std::numeric_limits<double>::epsilon())));
+    if (check_one && !degenerate) {
+      KynemaUGFEnv::self().kynema_ugfOutput()
+        << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
+        << " p=" << static_cast<double>(p) << " q=" << static_cast<double>(q)
+        << "([[" << A[0][0] << "," << A[0][1] << "," << A[0][2] << "],["
+        << A[1][0] << "," << A[1][1] << "," << A[1][2] << "],[" << A[2][0]
+        << "," << A[2][1] << "," << A[2][2] << "]])" << std::endl;
+      throw std::runtime_error(
+        "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+    }
+
+    Wide arg = -qSign * argMag;
+    arg = std::min(std::max(arg, Wide(-1.0L)), Wide(1.0L));
+    const Wide phi = std::acos(arg) / Wide(3.0L);
+    const Wide t1 = Wide(2.0L) * r * std::cos(phi);
+    const Wide t2 = Wide(2.0L) * r * std::cos(phi - Wide(2.0L) * pi / Wide(3.0L));
+    const Wide t3 = Wide(2.0L) * r * std::cos(phi - Wide(4.0L) * pi / Wide(3.0L));
+    const Wide scaleWide = static_cast<Wide>(scale);
+    const Wide shiftWide = static_cast<Wide>(shift);
+    D[0][0] = static_cast<T>((degenerate ? shiftWide : t1 + shiftWide) * scaleWide);
+    D[1][1] = static_cast<T>((degenerate ? shiftWide : t2 + shiftWide) * scaleWide);
+    D[2][2] = static_cast<T>((degenerate ? shiftWide : t3 + shiftWide) * scaleWide);
+    D[0][1] = D[0][2] = D[1][0] = D[1][2] = D[2][0] = D[2][1] = T(0.0);
+    return;
+  }
+#endif
+
   const T p = C[0][0] * C[1][1] - C[0][1] * C[1][0] + C[1][1] * C[2][2] -
               C[1][2] * C[2][1] + C[0][0] * C[2][2] - C[0][2] * C[2][0];
   const T q =
