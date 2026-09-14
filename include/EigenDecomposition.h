@@ -15,6 +15,7 @@
 #include <KynemaUGFEnv.h>
 #include <cmath>
 #include <limits>
+#include <type_traits>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -337,10 +338,35 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
     Q[2][1] = Q[2][2] = 0.0;
 
   // Scale the matrix so invariant-based cubic coefficients are O(1)
-  T scale = T(0.0);
+  T maxAbs = T(0.0);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
-      scale = stk::math::max(scale, stk::math::abs(A[i][j]));
+      maxAbs = stk::math::max(maxAbs, stk::math::abs(A[i][j]));
+    }
+  }
+
+  T scale = maxAbs;
+  if constexpr (std::is_floating_point_v<T>) {
+    T minAbsNonzero = T(std::numeric_limits<double>::max());
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        const T absA = stk::math::abs(A[i][j]);
+        if (absA > T(0.0)) {
+          minAbsNonzero = stk::math::min(minAbsNonzero, absA);
+        }
+      }
+    }
+
+    if ((maxAbs > T(0.0)) &&
+        (minAbsNonzero < T(std::numeric_limits<double>::max()))) {
+      const T maxAmp =
+        stk::math::sqrt(T(std::numeric_limits<double>::max()));
+      const T logMaxAmp = stk::math::log(maxAmp);
+      const T logAmp = T(0.5) *
+                       (stk::math::log(maxAbs) - stk::math::log(minAbsNonzero));
+      const T amp =
+        stk::math::max(T(1.0), stk::math::exp(stk::math::min(logAmp, logMaxAmp)));
+      scale = maxAbs / amp;
     }
   }
 

@@ -395,11 +395,16 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     {0.0, -1.0e-160, 0.0},
     {0.0, 0.0, 0.0},
   };
+  const double unbalancedReal[3][3] = {
+    {0.0, 1.0, 0.0},
+    {0.0, 0.0, 1.0e-200},
+    {0.0, 1.0e-200, 0.0},
+  };
 
   double A[3][3];
   const double(*cases[])[3] = {
     zero,     tripleRoot, doubleRoot,       nearTripleRoot,
-    nearZero, nearLarge,  nonsymmetricReal, subnormalReal};
+    nearZero, nearLarge,  nonsymmetricReal, subnormalReal, unbalancedReal};
   for (const auto& testCase : cases) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
@@ -461,6 +466,20 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
   EXPECT_THROW(
     sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_),
     std::runtime_error);
+
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      A[i][j] = unbalancedReal[i][j];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
+
+  {
+    double eigenvalues[3] = {D_[0][0], D_[1][1], D_[2][2]};
+    std::sort(std::begin(eigenvalues), std::end(eigenvalues));
+    EXPECT_NEAR(eigenvalues[0], -1.0e-200, 1.0e-212);
+    EXPECT_NEAR(eigenvalues[1], 0.0, 1.0e-212);
+    EXPECT_NEAR(eigenvalues[2], 1.0e-200, 1.0e-212);
+  }
 }
 
 TEST(TestAMSUtils, testgetm43constant_finite_for_subnormal_spectrum)
