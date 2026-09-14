@@ -117,6 +117,47 @@ expect_finite_real_roots(const double (&A)[3][3], const double (&D)[3][3])
   EXPECT_DOUBLE_EQ(D[2][1], 0.0);
 }
 
+void
+expect_device_real_roots(
+  const double (&A)[3][3], const double (&expected)[3], const double tol)
+{
+  Kokkos::View<double[3][3], sierra::kynema_ugf::DeviceSpace> dA("dA");
+  Kokkos::View<double[3][3], sierra::kynema_ugf::DeviceSpace> dD("dD");
+  auto hA = Kokkos::create_mirror_view(dA);
+
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      hA(i, j) = A[i][j];
+
+  Kokkos::deep_copy(dA, hA);
+
+  Kokkos::parallel_for(
+    "test_general_eigenvalues_device",
+    sierra::kynema_ugf::DeviceRangePolicy(0, 1), KOKKOS_LAMBDA(const int) {
+      double localA[3][3], Q[3][3], D[3][3];
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+          localA[i][j] = dA(i, j);
+
+      sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(localA, Q, D);
+
+      for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+          dD(i, j) = D[i][j];
+    });
+
+  auto hD = Kokkos::create_mirror_view(dD);
+  Kokkos::deep_copy(hD, dD);
+
+  double eigenvalues[3] = {hD(0, 0), hD(1, 1), hD(2, 2)};
+  std::sort(std::begin(eigenvalues), std::end(eigenvalues));
+
+  for (int i = 0; i < 3; ++i) {
+    EXPECT_TRUE(std::isfinite(eigenvalues[i]));
+    EXPECT_NEAR(eigenvalues[i], expected[i], tol);
+  }
+}
+
 } // namespace
 
 // This tests whether the correct eigenvalues are obtained
@@ -413,8 +454,8 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
 
   double A[3][3];
   const double(*cases[])[3] = {
-    zero,     tripleRoot, doubleRoot,       nearTripleRoot,
-    nearZero, nearLarge,  nonsymmetricReal, subnormalReal, unbalancedReal};
+    zero,      tripleRoot,       doubleRoot,    nearTripleRoot, nearZero,
+    nearLarge, nonsymmetricReal, subnormalReal, unbalancedReal};
   for (const auto& testCase : cases) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
@@ -518,6 +559,10 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     EXPECT_NEAR(eigenvalues[1], 0.0, 1.0e-312);
     EXPECT_NEAR(eigenvalues[2], 1.0e-300, 1.0e-312);
   }
+
+  const double cappedAmplificationGapExpected[3] = {-1.0e-300, 0.0, 1.0e-300};
+  expect_device_real_roots(
+    cappedAmplificationGap, cappedAmplificationGapExpected, 1.0e-312);
 }
 
 TEST(TestAMSUtils, testgetm43constant_finite_for_subnormal_spectrum)

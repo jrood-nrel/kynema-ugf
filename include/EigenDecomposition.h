@@ -13,6 +13,7 @@
 #include <FieldTypeDef.h>
 #include <SimdInterface.h>
 #include <KynemaUGFEnv.h>
+#include <cstddef>
 #include <cmath>
 #include <limits>
 #include <type_traits>
@@ -26,6 +27,187 @@ namespace kynema_ugf {
 
 class Realm;
 namespace EigenDecomposition {
+
+namespace impl {
+
+template <class T>
+struct ScaledValue
+{
+  T frac{T(0.0)};
+  int exp{0};
+  bool isZero{true};
+};
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+make_scaled_value(const T value, const int exp = 0)
+{
+  if (value == T(0.0)) {
+    return {};
+  }
+
+  int expAdjust = 0;
+  const T frac = std::frexp(value, &expAdjust);
+  return {frac, exp + expAdjust, false};
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+multiply_scaled_values(const ScaledValue<T>& lhs, const ScaledValue<T>& rhs)
+{
+  if (lhs.isZero || rhs.isZero) {
+    return {};
+  }
+
+  return make_scaled_value(lhs.frac * rhs.frac, lhs.exp + rhs.exp);
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+multiply_scaled_values(const T lhs, const T rhs)
+{
+  return multiply_scaled_values(make_scaled_value(lhs), make_scaled_value(rhs));
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+multiply_scaled_values(const T lhs, const T rhs, const T third)
+{
+  return multiply_scaled_values(
+    multiply_scaled_values(lhs, rhs), make_scaled_value(third));
+}
+
+template <class T, size_t N>
+KOKKOS_FUNCTION ScaledValue<T>
+sum_scaled_values(const ScaledValue<T> (&terms)[N])
+{
+  int maxExp = std::numeric_limits<int>::min();
+  for (size_t i = 0; i < N; ++i) {
+    if (!terms[i].isZero) {
+      maxExp = terms[i].exp > maxExp ? terms[i].exp : maxExp;
+    }
+  }
+
+  if (maxExp == std::numeric_limits<int>::min()) {
+    return {};
+  }
+
+  T frac = T(0.0);
+  for (size_t i = 0; i < N; ++i) {
+    if (!terms[i].isZero) {
+      frac += std::ldexp(terms[i].frac, terms[i].exp - maxExp);
+    }
+  }
+
+  return make_scaled_value(frac, maxExp);
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+abs_scaled_value(const ScaledValue<T>& value)
+{
+  return {stk::math::abs(value.frac), value.exp, value.isZero};
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+scale_scaled_value(const ScaledValue<T>& value, const T factor)
+{
+  if (value.isZero || (factor == T(0.0))) {
+    return {};
+  }
+
+  return make_scaled_value(value.frac * factor, value.exp);
+}
+
+template <class T>
+KOKKOS_FUNCTION int
+compare_abs_scaled_values(const ScaledValue<T>& lhs, const ScaledValue<T>& rhs)
+{
+  if (lhs.isZero) {
+    return rhs.isZero ? 0 : -1;
+  }
+  if (rhs.isZero) {
+    return 1;
+  }
+  if (lhs.exp != rhs.exp) {
+    return lhs.exp < rhs.exp ? -1 : 1;
+  }
+
+  const T lhsAbs = stk::math::abs(lhs.frac);
+  const T rhsAbs = stk::math::abs(rhs.frac);
+  if (lhsAbs < rhsAbs) {
+    return -1;
+  }
+  if (lhsAbs > rhsAbs) {
+    return 1;
+  }
+  return 0;
+}
+
+template <class T>
+KOKKOS_FUNCTION bool
+scaled_value_greater_than_positive(
+  const ScaledValue<T>& lhs, const ScaledValue<T>& rhs)
+{
+  if (lhs.isZero || (lhs.frac <= T(0.0))) {
+    return false;
+  }
+  if (rhs.isZero) {
+    return true;
+  }
+  if (lhs.exp != rhs.exp) {
+    return lhs.exp > rhs.exp;
+  }
+  return lhs.frac > rhs.frac;
+}
+
+template <class T>
+KOKKOS_FUNCTION bool
+scaled_value_less_than_negative(
+  const ScaledValue<T>& lhs, const ScaledValue<T>& rhs)
+{
+  if (lhs.isZero || (lhs.frac >= T(0.0))) {
+    return false;
+  }
+
+  return compare_abs_scaled_values(lhs, rhs) > 0;
+}
+
+template <class T>
+KOKKOS_FUNCTION ScaledValue<T>
+sqrt_scaled_value_positive(const ScaledValue<T>& value)
+{
+  if (value.isZero) {
+    return {};
+  }
+
+  int exp = value.exp;
+  T frac = value.frac;
+  if ((exp % 2) != 0) {
+    frac *= T(2.0);
+    --exp;
+  }
+
+  return make_scaled_value(stk::math::sqrt(frac), exp / 2);
+}
+
+template <class T>
+KOKKOS_FUNCTION T
+scaled_value_to_value(const ScaledValue<T>& value)
+{
+  return value.isZero ? T(0.0) : std::ldexp(value.frac, value.exp);
+}
+
+template <class T>
+KOKKOS_FUNCTION T
+log_abs_scaled_value(const ScaledValue<T>& value)
+{
+  return stk::math::log(stk::math::abs(value.frac)) +
+         T(value.exp) * T(0.69314718055994530942);
+}
+
+} // namespace impl
 
 //--------------------------------------------------------------------------
 //-------- symmetric diagonalize (2D) --------------------------------------
@@ -347,7 +529,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 
   T scale = maxAbs;
   if constexpr (std::is_floating_point_v<T>) {
-    T minAbsNonzero = T(std::numeric_limits<double>::max());
+    T minAbsNonzero = T(std::numeric_limits<T>::max());
     for (int i = 0; i < 3; ++i) {
       for (int j = 0; j < 3; ++j) {
         const T absA = stk::math::abs(A[i][j]);
@@ -357,19 +539,17 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
       }
     }
 
-    if ((maxAbs > T(0.0)) &&
-        (minAbsNonzero < T(std::numeric_limits<double>::max()))) {
-      const T maxCenteredEntry = T(2.0);
-      const T qTermCount = T(6.0);
-      const T maxAmp = stk::math::cbrt(
-        T(std::numeric_limits<double>::max()) /
-        (qTermCount * maxCenteredEntry * maxCenteredEntry * maxCenteredEntry));
-      const T logMaxAmp = stk::math::log(maxAmp);
-      const T logAmp = T(0.5) *
-                       (stk::math::log(maxAbs) - stk::math::log(minAbsNonzero));
-      const T amp =
-        stk::math::max(T(1.0), stk::math::exp(stk::math::min(logAmp, logMaxAmp)));
-      scale = maxAbs / amp;
+    if (
+      (maxAbs > T(0.0)) && (minAbsNonzero < T(std::numeric_limits<T>::max()))) {
+      const T minPositive =
+        T(std::numeric_limits<T>::has_denorm == std::denorm_absent
+            ? std::numeric_limits<T>::min()
+            : std::numeric_limits<T>::denorm_min());
+      const T balancedScale = stk::math::exp(
+        T(0.5) * (stk::math::log(maxAbs) + stk::math::log(minAbsNonzero)));
+      const T minScale = maxAbs / T(std::numeric_limits<T>::max());
+      const T maxScale = minAbsNonzero / minPositive;
+      scale = stk::math::max(minScale, stk::math::min(balancedScale, maxScale));
     }
   }
 
@@ -392,74 +572,124 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
     C[i][i] -= shift;
   }
 
-#if !defined(KOKKOS_ENABLE_GPU)
   if constexpr (std::is_floating_point_v<T>) {
-    using Wide = long double;
-    const Wide c00 = static_cast<Wide>(C[0][0]);
-    const Wide c01 = static_cast<Wide>(C[0][1]);
-    const Wide c02 = static_cast<Wide>(C[0][2]);
-    const Wide c10 = static_cast<Wide>(C[1][0]);
-    const Wide c11 = static_cast<Wide>(C[1][1]);
-    const Wide c12 = static_cast<Wide>(C[1][2]);
-    const Wide c20 = static_cast<Wide>(C[2][0]);
-    const Wide c21 = static_cast<Wide>(C[2][1]);
-    const Wide c22 = static_cast<Wide>(C[2][2]);
+    const impl::ScaledValue<T> pTerms[] = {
+      impl::multiply_scaled_values(C[0][0], C[1][1]),
+      impl::multiply_scaled_values(-C[0][1], C[1][0]),
+      impl::multiply_scaled_values(C[1][1], C[2][2]),
+      impl::multiply_scaled_values(-C[1][2], C[2][1]),
+      impl::multiply_scaled_values(C[0][0], C[2][2]),
+      impl::multiply_scaled_values(-C[0][2], C[2][0])};
+    const impl::ScaledValue<T> qTerms[] = {
+      impl::multiply_scaled_values(-C[0][0], C[1][1], C[2][2]),
+      impl::multiply_scaled_values(-C[0][1], C[1][2], C[2][0]),
+      impl::multiply_scaled_values(-C[0][2], C[1][0], C[2][1]),
+      impl::multiply_scaled_values(C[0][0], C[1][2], C[2][1]),
+      impl::multiply_scaled_values(C[0][1], C[1][0], C[2][2]),
+      impl::multiply_scaled_values(C[0][2], C[1][1], C[2][0])};
+    const impl::ScaledValue<T> pTolTerms[] = {
+      impl::multiply_scaled_values(C[0][0], C[1][1]),
+      impl::multiply_scaled_values(C[0][1], C[1][0]),
+      impl::multiply_scaled_values(C[1][1], C[2][2]),
+      impl::multiply_scaled_values(C[1][2], C[2][1]),
+      impl::multiply_scaled_values(C[0][0], C[2][2]),
+      impl::multiply_scaled_values(C[0][2], C[2][0])};
+    const impl::ScaledValue<T> qTolTerms[] = {
+      impl::multiply_scaled_values(C[0][0], C[1][1], C[2][2]),
+      impl::multiply_scaled_values(C[0][1], C[1][2], C[2][0]),
+      impl::multiply_scaled_values(C[0][2], C[1][0], C[2][1]),
+      impl::multiply_scaled_values(C[0][0], C[1][2], C[2][1]),
+      impl::multiply_scaled_values(C[0][1], C[1][0], C[2][2]),
+      impl::multiply_scaled_values(C[0][2], C[1][1], C[2][0])};
 
-    const Wide p = c00 * c11 - c01 * c10 + c11 * c22 - c12 * c21 +
-                   c00 * c22 - c02 * c20;
-    const Wide q = -(c00 * c11 * c22 + c01 * c12 * c20 + c02 * c10 * c21 -
-                     c00 * c12 * c21 - c01 * c10 * c22 - c02 * c11 * c20);
-    const Wide pTol = Wide(16.0L) * Wide(std::numeric_limits<double>::epsilon()) *
-                      (std::abs(c00 * c11) + std::abs(c01 * c10) +
-                       std::abs(c11 * c22) + std::abs(c12 * c21) +
-                       std::abs(c00 * c22) + std::abs(c02 * c20));
-    const Wide qAbs = std::abs(q);
-    const Wide qTol = Wide(16.0L) * Wide(std::numeric_limits<double>::epsilon()) *
-                      (std::abs(c00 * c11 * c22) + std::abs(c01 * c12 * c20) +
-                       std::abs(c02 * c10 * c21) + std::abs(c00 * c12 * c21) +
-                       std::abs(c01 * c10 * c22) + std::abs(c02 * c11 * c20));
+    const auto p = impl::sum_scaled_values(pTerms);
+    const auto q = impl::sum_scaled_values(qTerms);
+    const auto pTol = impl::scale_scaled_value(
+      impl::sum_scaled_values(pTolTerms),
+      T(16.0) * T(std::numeric_limits<T>::epsilon()));
+    const auto qTol = impl::scale_scaled_value(
+      impl::sum_scaled_values(qTolTerms),
+      T(16.0) * T(std::numeric_limits<T>::epsilon()));
+    const auto qAbs = impl::abs_scaled_value(q);
 
-    const bool degenerate = (std::abs(p) <= pTol) && (qAbs <= qTol);
-    const Wide pSafe = degenerate ? Wide(-1.0L) : p;
-    const Wide r = std::sqrt(std::max(-pSafe / Wide(3.0L), Wide(0.0L)));
-    const Wide qAbsSafe = (qAbs == Wide(0.0L)) ? Wide(1.0L) : qAbs;
-    const Wide qSign = q / qAbsSafe;
-    const Wide rSafe = (r > Wide(0.0L)) ? r : Wide(1.0L);
-    const Wide argLog = std::log(qAbsSafe) - Wide(0.69314718055994530942L) -
-                        Wide(3.0L) * std::log(rSafe);
-    const Wide argMag = std::exp(std::min(
-      argLog, std::log(std::numeric_limits<Wide>::max())));
-    const bool check_one =
-      ((p > pTol) || ((p >= -pTol) && (qAbs > qTol))) ||
-      ((p < -pTol) && (qAbs > qTol) &&
-       (argMag > Wide(1.0L) + Wide(16.0L) *
-                             Wide(std::numeric_limits<double>::epsilon())));
-    if (check_one && !degenerate) {
-      KynemaUGFEnv::self().kynema_ugfOutput()
-        << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
-        << " p=" << static_cast<double>(p) << " q=" << static_cast<double>(q)
-        << "([[" << A[0][0] << "," << A[0][1] << "," << A[0][2] << "],["
-        << A[1][0] << "," << A[1][1] << "," << A[1][2] << "],[" << A[2][0]
-        << "," << A[2][1] << "," << A[2][2] << "]])" << std::endl;
-      throw std::runtime_error(
-        "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+    const bool degenerate = (impl::compare_abs_scaled_values(p, pTol) <= 0) &&
+                            (impl::compare_abs_scaled_values(qAbs, qTol) <= 0);
+    const bool pLessThanNegativeTol =
+      impl::scaled_value_less_than_negative(p, pTol);
+    const bool qOutsideTol = impl::compare_abs_scaled_values(qAbs, qTol) > 0;
+
+    bool check_one = impl::scaled_value_greater_than_positive(p, pTol) ||
+                     ((!pLessThanNegativeTol) && qOutsideTol);
+
+    auto r = impl::ScaledValue<T>{};
+    if (!degenerate && pLessThanNegativeTol) {
+      r = impl::sqrt_scaled_value_positive(
+        impl::scale_scaled_value(impl::abs_scaled_value(p), T(1.0 / 3.0)));
+
+      if (qOutsideTol && !qAbs.isZero) {
+        const T argMag = stk::math::exp(stk::math::min(
+          impl::log_abs_scaled_value(qAbs) - T(0.69314718055994530942) -
+            T(3.0) * impl::log_abs_scaled_value(r),
+          stk::math::log(T(std::numeric_limits<T>::max()))));
+        check_one =
+          check_one ||
+          (argMag > T(1.0) + T(16.0) * T(std::numeric_limits<T>::epsilon()));
+      }
     }
 
-    Wide arg = -qSign * argMag;
-    arg = std::min(std::max(arg, Wide(-1.0L)), Wide(1.0L));
-    const Wide phi = std::acos(arg) / Wide(3.0L);
-    const Wide t1 = Wide(2.0L) * r * std::cos(phi);
-    const Wide t2 = Wide(2.0L) * r * std::cos(phi - Wide(2.0L) * pi / Wide(3.0L));
-    const Wide t3 = Wide(2.0L) * r * std::cos(phi - Wide(4.0L) * pi / Wide(3.0L));
-    const Wide scaleWide = static_cast<Wide>(scale);
-    const Wide shiftWide = static_cast<Wide>(shift);
-    D[0][0] = static_cast<T>((degenerate ? shiftWide : t1 + shiftWide) * scaleWide);
-    D[1][1] = static_cast<T>((degenerate ? shiftWide : t2 + shiftWide) * scaleWide);
-    D[2][2] = static_cast<T>((degenerate ? shiftWide : t3 + shiftWide) * scaleWide);
+    if (check_one && !degenerate) {
+#if !defined(KOKKOS_ENABLE_GPU)
+      KynemaUGFEnv::self().kynema_ugfOutput()
+        << "Error, complex eigenvalues in "
+           "EigenDecomposition::general_eigenvalues"
+        << " p=" << impl::scaled_value_to_value(p)
+        << " q=" << impl::scaled_value_to_value(q) << "([[" << A[0][0] << ","
+        << A[0][1] << "," << A[0][2] << "],[" << A[1][0] << "," << A[1][1]
+        << "," << A[1][2] << "],[" << A[2][0] << "," << A[2][1] << ","
+        << A[2][2] << "]])" << std::endl;
+      throw std::runtime_error("ERROR, complex eigenvalues in "
+                               "EigenDecomposition::general_eigenvalues");
+#else
+      ThrowErrorMsgDevice("ERROR, complex eigenvalues in "
+                          "EigenDecomposition::general_eigenvalues");
+#endif
+    }
+
+    T t1 = T(0.0), t2 = T(0.0), t3 = T(0.0);
+    if (!degenerate) {
+      T arg = T(0.0);
+      if (!qAbs.isZero) {
+        const T qSign = q.frac > T(0.0) ? T(1.0) : T(-1.0);
+        const T argMag = stk::math::exp(stk::math::min(
+          impl::log_abs_scaled_value(qAbs) - T(0.69314718055994530942) -
+            T(3.0) * impl::log_abs_scaled_value(r),
+          stk::math::log(T(std::numeric_limits<T>::max()))));
+        arg = -qSign * argMag;
+      }
+
+      arg = stk::math::min(stk::math::max(arg, T(-1.0)), T(1.0));
+      const T phi = stk::math::acos(arg) / T(3.0);
+      const auto scaleFactor = impl::make_scaled_value(scale);
+      const auto t1Scaled = impl::multiply_scaled_values(
+        scaleFactor, impl::scale_scaled_value(r, T(2.0) * stk::math::cos(phi)));
+      const auto t2Scaled = impl::multiply_scaled_values(
+        scaleFactor, impl::scale_scaled_value(
+                       r, T(2.0) * stk::math::cos(phi - T(2.0) * pi / T(3.0))));
+      const auto t3Scaled = impl::multiply_scaled_values(
+        scaleFactor, impl::scale_scaled_value(
+                       r, T(2.0) * stk::math::cos(phi - T(4.0) * pi / T(3.0))));
+      t1 = impl::scaled_value_to_value(t1Scaled);
+      t2 = impl::scaled_value_to_value(t2Scaled);
+      t3 = impl::scaled_value_to_value(t3Scaled);
+    }
+
+    const T shiftScaled = shift * scale;
+    D[0][0] = degenerate ? shiftScaled : t1 + shiftScaled;
+    D[1][1] = degenerate ? shiftScaled : t2 + shiftScaled;
+    D[2][2] = degenerate ? shiftScaled : t3 + shiftScaled;
     D[0][1] = D[0][2] = D[1][0] = D[1][2] = D[2][0] = D[2][1] = T(0.0);
     return;
   }
-#endif
 
   const T p = C[0][0] * C[1][1] - C[0][1] * C[1][0] + C[1][1] * C[2][2] -
               C[1][2] * C[2][1] + C[0][0] * C[2][2] - C[0][2] * C[2][0];
