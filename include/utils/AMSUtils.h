@@ -17,6 +17,16 @@ namespace kynema_ugf {
 
 namespace ams_utils {
 
+template <class T>
+KOKKOS_FUNCTION T
+positive_eigenvalue_floor(const T eigScale)
+{
+  const T relativeFloor = T(1.0e-12) * eigScale;
+  const T nonzeroFloor = stk::math::if_then_else(
+    relativeFloor > T(0.0), relativeFloor, eigScale);
+  return stk::math::if_then_else(eigScale > T(0.0), nonzeroFloor, T(1.0e-16));
+}
+
 template <class T, int dim = 3>
 KOKKOS_FUNCTION T
 get_M43_constant(T D[dim][dim], const double CMdeg)
@@ -34,8 +44,7 @@ get_M43_constant(T D[dim][dim], const double CMdeg)
   const T eigScale = stk::math::max(
     stk::math::abs(D[0][0]),
     stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
-  const T eigFloor = stk::math::if_then_else(
-    eigScale > T(0.0), T(1.0e-12) * eigScale, T(1.0e-16));
+  const T eigFloor = positive_eigenvalue_floor(eigScale);
   const T d0 = stk::math::max(D[0][0], eigFloor);
   const T d1 = stk::math::max(D[1][1], eigFloor);
   const T d2 = stk::math::max(D[2][2], eigFloor);

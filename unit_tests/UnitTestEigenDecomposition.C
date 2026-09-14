@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "EigenDecomposition.h"
+#include "utils/AMSUtils.h"
 
 // NGP-based includes
 #include "SimdInterface.h"
@@ -386,10 +387,20 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     {0.0, 2.0, 1.0},
     {0.0, 0.0, 1.0},
   };
+  const double subnormalReal[3][3] = {
+    {1.0e-160, 1.0, 0.0},
+    {0.0, -1.0e-160, 0.0},
+    {0.0, 0.0, 0.0},
+  };
 
   double A[3][3];
-  const double (*cases[])[3] = {
-    zero, tripleRoot, doubleRoot, nearZero, nearLarge, nonsymmetricReal};
+  const double (*cases[])[3] = {zero,
+                                tripleRoot,
+                                doubleRoot,
+                                nearZero,
+                                nearLarge,
+                                nonsymmetricReal,
+                                subnormalReal};
   for (const auto& testCase : cases) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
@@ -424,4 +435,17 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
   EXPECT_THROW(
     sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_),
     std::runtime_error);
+}
+
+TEST(TestAMSUtils, testgetm43constant_finite_for_subnormal_spectrum)
+{
+  double D[3][3] = {
+    {1.0e-320, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+    {0.0, 0.0, 0.0},
+  };
+
+  const double cm43 =
+    sierra::kynema_ugf::ams_utils::get_M43_constant<double>(D, 1.0);
+  EXPECT_TRUE(std::isfinite(cm43));
 }

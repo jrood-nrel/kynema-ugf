@@ -108,8 +108,8 @@ MomentumSSTAMSDiffEdgeKernel::execute(
   const EdgeKernelTraits::DblType eigScaleM = stk::math::max(
     stk::math::abs(D[0][0]),
     stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
-  const EdgeKernelTraits::DblType eigFloorM = stk::math::if_then_else(
-    eigScaleM > 0.0, 1.0e-12 * eigScaleM, 1.0e-16);
+  const EdgeKernelTraits::DblType eigFloorM =
+    ams_utils::positive_eigenvalue_floor(eigScaleM);
   EdgeKernelTraits::DblType Dsafe[EdgeKernelTraits::NDimMax]
                                 [EdgeKernelTraits::NDimMax];
   for (int i = 0; i < ndim; ++i) {

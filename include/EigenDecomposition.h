@@ -391,9 +391,15 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
 
   const T r = stk::math::sqrt(stk::math::max(-pSafe / 3.0, T(0.0)));
-  T arg =
-    3.0 * q * stk::math::sqrt(stk::math::max(-3.0 / pSafe, T(0.0))) /
-    (2.0 * pSafe);
+  const T qAbs = stk::math::abs(q);
+  const T qAbsSafe = stk::math::if_then_else(qAbs == T(0.0), T(1.0), qAbs);
+  const T qSign = q / qAbsSafe;
+  const T rSafe = stk::math::if_then_else(r > T(0.0), r, T(1.0));
+  const T argLog = stk::math::log(qAbsSafe) - T(0.69314718055994530942) -
+                   T(3.0) * stk::math::log(rSafe);
+  const T argMag =
+    stk::math::exp(stk::math::min(argLog, T(709.78271289338397)));
+  T arg = -qSign * argMag;
   arg = stk::math::min(stk::math::max(arg, T(-1.0)), T(1.0));
 
   const T phi = stk::math::acos(arg) / 3.0;

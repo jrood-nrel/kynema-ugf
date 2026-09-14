@@ -263,8 +263,8 @@ SSTAMSAveragesAlg::execute()
       const DblType eigScaleM = stk::math::max(
         stk::math::abs(D[0][0]),
         stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
-      const DblType eigFloorM = stk::math::if_then_else(
-        eigScaleM > 0.0, 1.0e-12 * eigScaleM, 1.0e-16);
+      const DblType eigFloorM =
+        ams_utils::positive_eigenvalue_floor(eigScaleM);
       DblType Dsafe[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
       for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i) {
         for (int j = 0; j < kynema_ugf_ngp::NDimMax; ++j) {
