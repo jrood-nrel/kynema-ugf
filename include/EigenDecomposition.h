@@ -364,13 +364,8 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T p = coFacA - trA * trA / 3.0;
   const T q = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
 
-  const T disc = trA * trA * coFacA * coFacA - 4.0 * coFacA * coFacA * coFacA -
-                 4.0 * trA * trA * trA * detA - 27.0 * detA * detA +
-                 18.0 * trA * coFacA * detA;
-  const T discScale =
-    trA * trA * coFacA * coFacA + 4.0 * stk::math::abs(coFacA * coFacA * coFacA) +
-    4.0 * stk::math::abs(trA * trA * trA * detA) + 27.0 * detA * detA +
-    18.0 * stk::math::abs(trA * coFacA * detA);
+  const T disc = -(4.0 * p * p * p + 27.0 * q * q);
+  const T discScale = 4.0 * stk::math::abs(p * p * p) + 27.0 * q * q;
   const T discTol = T(1.0e-12) * discScale;
 
   const auto check_one = disc < -discTol;
