@@ -86,12 +86,10 @@ void
 expect_finite_real_roots(const double (&A)[3][3], const double (&D)[3][3])
 {
   const double trA = A[0][0] + A[1][1] + A[2][2];
-  const double detA = A[0][0] * A[1][1] * A[2][2] +
-                      A[0][1] * A[1][2] * A[2][0] +
-                      A[0][2] * A[1][0] * A[2][1] -
-                      A[0][0] * A[1][2] * A[2][1] -
-                      A[0][1] * A[1][0] * A[2][2] -
-                      A[0][2] * A[1][1] * A[2][0];
+  const double detA =
+    A[0][0] * A[1][1] * A[2][2] + A[0][1] * A[1][2] * A[2][0] +
+    A[0][2] * A[1][0] * A[2][1] - A[0][0] * A[1][2] * A[2][1] -
+    A[0][1] * A[1][0] * A[2][2] - A[0][2] * A[1][1] * A[2][0];
   const double coFacA = A[0][0] * A[1][1] - A[0][1] * A[1][0] +
                         A[1][1] * A[2][2] - A[1][2] * A[2][1] +
                         A[0][0] * A[2][2] - A[0][2] * A[2][0];
@@ -370,6 +368,11 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     {0.0, 2.0, 0.0},
     {0.0, 0.0, 5.0},
   };
+  const double nearTripleRoot[3][3] = {
+    {1.0 - 5.0e-7, 0.0, 0.0},
+    {0.0, 1.0, 0.0},
+    {0.0, 0.0, 1.0 + 5.0e-7},
+  };
 
   const double nearZero[3][3] = {
     {2.0e-20, -1.0e-20, 5.0e-21},
@@ -394,13 +397,9 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
   };
 
   double A[3][3];
-  const double (*cases[])[3] = {zero,
-                                tripleRoot,
-                                doubleRoot,
-                                nearZero,
-                                nearLarge,
-                                nonsymmetricReal,
-                                subnormalReal};
+  const double(*cases[])[3] = {
+    zero,     tripleRoot, doubleRoot,       nearTripleRoot,
+    nearZero, nearLarge,  nonsymmetricReal, subnormalReal};
   for (const auto& testCase : cases) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
@@ -408,6 +407,20 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
 
     sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
     expect_finite_real_roots(A, D_);
+  }
+
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      A[i][j] = nearTripleRoot[i][j];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
+
+  {
+    double eigenvalues[3] = {D_[0][0], D_[1][1], D_[2][2]};
+    std::sort(std::begin(eigenvalues), std::end(eigenvalues));
+    EXPECT_NEAR(eigenvalues[0], 1.0 - 5.0e-7, 1.0e-12);
+    EXPECT_NEAR(eigenvalues[1], 1.0, 1.0e-12);
+    EXPECT_NEAR(eigenvalues[2], 1.0 + 5.0e-7, 1.0e-12);
   }
 
   const double complexPair[3][3] = {
@@ -424,8 +437,8 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     std::runtime_error);
 
   const double shiftedComplexPair[3][3] = {
-    {1.0, 0.0, 0.0},
-    {1.0, 1.0, -1.0e-13},
+    {1.0, 0.0, -1.0e-15},
+    {1.0, 1.0, 0.0},
     {0.0, 1.0, 1.0},
   };
   for (int i = 0; i < 3; ++i)

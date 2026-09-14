@@ -354,23 +354,35 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   }
 
   const T trA = B[0][0] + B[1][1] + B[2][2];
-  const T detA = B[0][0] * B[1][1] * B[2][2] + B[0][1] * B[1][2] * B[2][0] +
-                 B[0][2] * B[1][0] * B[2][1] - B[0][0] * B[1][2] * B[2][1] -
-                 B[0][1] * B[1][0] * B[2][2] - B[0][2] * B[1][1] * B[2][0];
-  const T coFacA = B[0][0] * B[1][1] - B[0][1] * B[1][0] + B[1][1] * B[2][2] -
-                   B[1][2] * B[2][1] + B[0][0] * B[2][2] - B[0][2] * B[2][0];
+  const T shift = trA / 3.0;
+  T C[3][3];
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      C[i][j] = B[i][j];
+    }
+    C[i][i] -= shift;
+  }
 
-  // depressed cubic t^3 + p t + q
-  const T p = coFacA - trA * trA / 3.0;
-  const T q = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
+  const T p = C[0][0] * C[1][1] - C[0][1] * C[1][0] + C[1][1] * C[2][2] -
+              C[1][2] * C[2][1] + C[0][0] * C[2][2] - C[0][2] * C[2][0];
+  const T q =
+    -(C[0][0] * C[1][1] * C[2][2] + C[0][1] * C[1][2] * C[2][0] +
+      C[0][2] * C[1][0] * C[2][1] - C[0][0] * C[1][2] * C[2][1] -
+      C[0][1] * C[1][0] * C[2][2] - C[0][2] * C[1][1] * C[2][0]);
 
-  const T pTol = T(16.0) * T(std::numeric_limits<double>::epsilon()) *
-                 (stk::math::abs(coFacA) + stk::math::abs(trA * trA / 3.0));
+  const T pTol =
+    T(16.0) * T(std::numeric_limits<double>::epsilon()) *
+    (stk::math::abs(C[0][0] * C[1][1]) + stk::math::abs(C[0][1] * C[1][0]) +
+     stk::math::abs(C[1][1] * C[2][2]) + stk::math::abs(C[1][2] * C[2][1]) +
+     stk::math::abs(C[0][0] * C[2][2]) + stk::math::abs(C[0][2] * C[2][0]));
   const T qAbs = stk::math::abs(q);
   const T qTol = T(16.0) * T(std::numeric_limits<double>::epsilon()) *
-                 (stk::math::abs(coFacA * trA / 3.0) +
-                  stk::math::abs(2.0 * trA * trA * trA / 27.0) +
-                  stk::math::abs(detA));
+                 (stk::math::abs(C[0][0] * C[1][1] * C[2][2]) +
+                  stk::math::abs(C[0][1] * C[1][2] * C[2][0]) +
+                  stk::math::abs(C[0][2] * C[1][0] * C[2][1]) +
+                  stk::math::abs(C[0][0] * C[1][2] * C[2][1]) +
+                  stk::math::abs(C[0][1] * C[1][0] * C[2][2]) +
+                  stk::math::abs(C[0][2] * C[1][1] * C[2][0]));
   const auto degenerate = (stk::math::abs(p) <= pTol) & (qAbs <= qTol);
   const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
 
@@ -385,8 +397,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const auto check_one =
     ((p > pTol) | ((p >= -pTol) & (qAbs > qTol))) |
     ((p < -pTol) & (qAbs > qTol) &
-     (argMag >
-      T(1.0) + T(16.0) * T(std::numeric_limits<double>::epsilon())));
+     (argMag > T(1.0) + T(16.0) * T(std::numeric_limits<double>::epsilon())));
   const bool exit_now = stk::simd::are_all(check_one & (!degenerate));
   if (exit_now) {
 #if !defined(KOKKOS_ENABLE_GPU)
@@ -412,7 +423,6 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T t2 = 2.0 * r * stk::math::cos(phi - 2.0 * pi / 3.0);
   const T t3 = 2.0 * r * stk::math::cos(phi - 4.0 * pi / 3.0);
 
-  const T shift = trA / 3.0;
   D[0][0] = stk::math::if_then_else(degenerate, shift, t1 + shift) * scale;
   D[1][1] = stk::math::if_then_else(degenerate, shift, t2 + shift) * scale;
   D[2][2] = stk::math::if_then_else(degenerate, shift, t3 + shift) * scale;
