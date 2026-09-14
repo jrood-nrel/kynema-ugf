@@ -381,10 +381,15 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     {-1.0e20, 2.0e20, 2.5e19},
     {5.0e19, 2.5e19, 1.5e20},
   };
+  const double nonsymmetricReal[3][3] = {
+    {3.0, 1.0, 0.0},
+    {0.0, 2.0, 1.0},
+    {0.0, 0.0, 1.0},
+  };
 
   double A[3][3];
   const double (*cases[])[3] = {
-    zero, tripleRoot, doubleRoot, nearZero, nearLarge};
+    zero, tripleRoot, doubleRoot, nearZero, nearLarge, nonsymmetricReal};
   for (const auto& testCase : cases) {
     for (int i = 0; i < 3; ++i)
       for (int j = 0; j < 3; ++j)
@@ -393,4 +398,17 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
     expect_finite_real_roots(A, D_);
   }
+
+  const double complexPair[3][3] = {
+    {0.0, 0.0, 0.0},
+    {1.0, 0.0, -1.0e-5},
+    {0.0, 1.0, 0.0},
+  };
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      A[i][j] = complexPair[i][j];
+
+  EXPECT_THROW(
+    sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_),
+    std::runtime_error);
 }

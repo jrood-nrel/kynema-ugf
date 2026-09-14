@@ -14,6 +14,7 @@
 #include <SimdInterface.h>
 #include <KynemaUGFEnv.h>
 #include <cmath>
+#include <limits>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -370,7 +371,7 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
     trA * trA * coFacA * coFacA + 4.0 * stk::math::abs(coFacA * coFacA * coFacA) +
     4.0 * stk::math::abs(trA * trA * trA * detA) + 27.0 * detA * detA +
     18.0 * stk::math::abs(trA * coFacA * detA);
-  const T discTol = T(1.0e-12) * stk::math::max(discScale, T(1.0));
+  const T discTol = T(1.0e-12) * discScale;
 
   const auto check_one = disc < -discTol;
   const bool exit_now = stk::simd::are_all(check_one);
@@ -389,10 +390,9 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 #endif
   }
 
-  const T pScale = stk::math::max(
-    stk::math::abs(coFacA), stk::math::max(stk::math::abs(trA * trA / 3.0), T(1.0)));
-  const T pTol = T(1.0e-14) * pScale;
-  const auto degenerate = stk::math::abs(p) < pTol;
+  const T pTol = T(16.0) * T(std::numeric_limits<double>::epsilon()) *
+                 (stk::math::abs(coFacA) + stk::math::abs(trA * trA / 3.0));
+  const auto degenerate = stk::math::abs(p) <= pTol;
   const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
 
   const T r = stk::math::sqrt(stk::math::max(-pSafe / 3.0, T(0.0)));
