@@ -95,7 +95,7 @@ expect_finite_real_roots(const double (&A)[3][3], const double (&D)[3][3])
                         A[1][1] * A[2][2] - A[1][2] * A[2][1] +
                         A[0][0] * A[2][2] - A[0][2] * A[2][0];
 
-  const double matrixScale = std::max(max_abs_entry(A), 1.0);
+  const double matrixScale = max_abs_entry(A);
   const double polyTol = 1.0e-10 * matrixScale * matrixScale * matrixScale;
   const double traceTol = 1.0e-10 * matrixScale;
 

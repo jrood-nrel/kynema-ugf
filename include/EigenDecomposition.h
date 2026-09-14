@@ -344,12 +344,11 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   }
 
   const T scaleSafe = stk::math::if_then_else(scale == T(0.0), T(1.0), scale);
-  const T invScale = T(1.0) / scaleSafe;
 
   T B[3][3];
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 3; ++j) {
-      B[i][j] = A[i][j] * invScale;
+      B[i][j] = A[i][j] / scaleSafe;
     }
   }
 
@@ -364,8 +363,36 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
   const T p = coFacA - trA * trA / 3.0;
   const T q = coFacA * trA / 3.0 - 2.0 * trA * trA * trA / 27.0 - detA;
 
-  const T tol = T(1.0e-12);
-  const auto degenerate = (stk::math::abs(p) < tol) | (p > T(0.0));
+  const T disc = trA * trA * coFacA * coFacA - 4.0 * coFacA * coFacA * coFacA -
+                 4.0 * trA * trA * trA * detA - 27.0 * detA * detA +
+                 18.0 * trA * coFacA * detA;
+  const T discScale =
+    trA * trA * coFacA * coFacA + 4.0 * stk::math::abs(coFacA * coFacA * coFacA) +
+    4.0 * stk::math::abs(trA * trA * trA * detA) + 27.0 * detA * detA +
+    18.0 * stk::math::abs(trA * coFacA * detA);
+  const T discTol = T(1.0e-12) * stk::math::max(discScale, T(1.0));
+
+  const auto check_one = disc < -discTol;
+  const bool exit_now = stk::simd::are_all(check_one);
+  if (exit_now) {
+#if !defined(KOKKOS_ENABLE_GPU)
+    KynemaUGFEnv::self().kynema_ugfOutput()
+      << "Error, complex eigenvalues in EigenDecomposition::general_eigenvalues"
+      << disc << "([[" << A[0][0] << "," << A[0][1] << "," << A[0][2] << "],["
+      << A[1][0] << "," << A[1][1] << "," << A[1][2] << "],[" << A[2][0] << ","
+      << A[2][1] << "," << A[2][2] << "]])" << std::endl;
+    throw std::runtime_error(
+      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+#else
+    ThrowErrorMsgDevice(
+      "ERROR, complex eigenvalues in EigenDecomposition::general_eigenvalues");
+#endif
+  }
+
+  const T pScale = stk::math::max(
+    stk::math::abs(coFacA), stk::math::max(stk::math::abs(trA * trA / 3.0), T(1.0)));
+  const T pTol = T(1.0e-14) * pScale;
+  const auto degenerate = stk::math::abs(p) < pTol;
   const T pSafe = stk::math::if_then_else(degenerate, T(-1.0), p);
 
   const T r = stk::math::sqrt(stk::math::max(-pSafe / 3.0, T(0.0)));

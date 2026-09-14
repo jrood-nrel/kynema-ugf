@@ -105,6 +105,19 @@ MomentumSSTAMSDiffEdgeKernel::execute(
                          nodalMij_.get(nodeR, i * ndim + j));
 
   EigenDecomposition::sym_diagonalize<EdgeKernelTraits::DblType>(Mij, Q, D);
+  const EdgeKernelTraits::DblType eigScaleM = stk::math::max(
+    stk::math::abs(D[0][0]),
+    stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
+  const EdgeKernelTraits::DblType eigFloorM =
+    stk::math::max(1.0e-16, 1.0e-12 * eigScaleM);
+  EdgeKernelTraits::DblType Dsafe[EdgeKernelTraits::NDimMax]
+                                [EdgeKernelTraits::NDimMax];
+  for (int i = 0; i < ndim; ++i) {
+    for (int j = 0; j < ndim; ++j) {
+      Dsafe[i][j] = 0.0;
+    }
+    Dsafe[i][i] = stk::math::max(D[i][i], eigFloorM);
+  }
 
   // At this point we have Q, the eigenvectors and D the eigenvalues of Mij,
   // so to create M43, we use Q D^(4/3) Q^T
@@ -116,7 +129,7 @@ MomentumSSTAMSDiffEdgeKernel::execute(
 
   const double fourThirds = 4. / 3.;
   for (int k = 0; k < ndim; k++) {
-    const EdgeKernelTraits::DblType D43 = stk::math::pow(D[k][k], fourThirds);
+    const EdgeKernelTraits::DblType D43 = stk::math::pow(Dsafe[k][k], fourThirds);
     for (int i = 0; i < ndim; i++) {
       for (int j = 0; j < ndim; j++) {
         M43[i][j] += Q[i][k] * Q[j][k] * D43;
@@ -126,9 +139,9 @@ MomentumSSTAMSDiffEdgeKernel::execute(
 
   // Compute cell aspect ratio blending
   const EdgeKernelTraits::DblType maxEigM =
-    stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+    stk::math::max(Dsafe[0][0], stk::math::max(Dsafe[1][1], Dsafe[2][2]));
   const EdgeKernelTraits::DblType minEigM =
-    stk::math::min(D[0][0], stk::math::min(D[1][1], D[2][2]));
+    stk::math::min(Dsafe[0][0], stk::math::min(Dsafe[1][1], Dsafe[2][2]));
   const EdgeKernelTraits::DblType aspectRatio = maxEigM / minEigM;
 
   const EdgeKernelTraits::DblType arScale = stk::math::if_then_else(
@@ -138,7 +151,7 @@ MomentumSSTAMSDiffEdgeKernel::execute(
 
   // Compute CM43
   EdgeKernelTraits::DblType CM43 = ams_utils::get_M43_constant<
-    EdgeKernelTraits::DblType, EdgeKernelTraits::NDimMax>(D, CMdeg_);
+    EdgeKernelTraits::DblType, EdgeKernelTraits::NDimMax>(Dsafe, CMdeg_);
 
   const EdgeKernelTraits::DblType CM43scale = stk::math::max(
     stk::math::min(

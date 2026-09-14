@@ -124,7 +124,6 @@ SSTAMSAveragesAlg::execute()
   const DblType avgTimeCoeff = avgTimeCoeff_;
   const DblType minPMbase = 1.0e-8;
   const DblType minSdr = 1.0e-16;
-  const DblType minEigFloor = 1.0e-16;
   const DblType minPMmag = 1.0e-12;
   const auto lengthScaleLimiter = lengthScaleLimiter_;
 
@@ -261,6 +260,19 @@ SSTAMSAveragesAlg::execute()
       // Eigenvalue decomposition of metric tensor
       EigenDecomposition::sym_diagonalize<DblType>(p_Mij, Q, D);
 
+      const DblType eigScaleM = stk::math::max(
+        stk::math::abs(D[0][0]),
+        stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
+      const DblType eigFloorM =
+        stk::math::max(1.0e-16, 1.0e-12 * eigScaleM);
+      DblType Dsafe[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
+      for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i) {
+        for (int j = 0; j < kynema_ugf_ngp::NDimMax; ++j) {
+          Dsafe[i][j] = 0.0;
+        }
+        Dsafe[i][i] = stk::math::max(D[i][i], eigFloorM);
+      }
+
       // initialize M43 to 0
       DblType M43[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
       for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i)
@@ -270,8 +282,7 @@ SSTAMSAveragesAlg::execute()
       const DblType fourThirds = 4.0 / 3.0;
 
       for (int l = 0; l < kynema_ugf_ngp::NDimMax; l++) {
-        const DblType D43 =
-          stk::math::pow(stk::math::max(D[l][l], 0.0), fourThirds);
+        const DblType D43 = stk::math::pow(Dsafe[l][l], fourThirds);
         for (int i = 0; i < kynema_ugf_ngp::NDimMax; i++) {
           for (int j = 0; j < kynema_ugf_ngp::NDimMax; j++) {
             M43[i][j] += Q[i][l] * Q[j][l] * D43;
@@ -280,11 +291,11 @@ SSTAMSAveragesAlg::execute()
       }
 
       const DblType maxEigM =
-        stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+        stk::math::max(Dsafe[0][0], stk::math::max(Dsafe[1][1], Dsafe[2][2]));
       const DblType minEigM =
-        stk::math::min(D[0][0], stk::math::min(D[1][1], D[2][2]));
+        stk::math::min(Dsafe[0][0], stk::math::min(Dsafe[1][1], Dsafe[2][2]));
 
-      const DblType aspectRatio = maxEigM / stk::math::max(minEigM, minEigFloor);
+      const DblType aspectRatio = maxEigM / minEigM;
 
       // zeroing out tensors
       DblType tauSGRS[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
@@ -301,7 +312,8 @@ SSTAMSAveragesAlg::execute()
       }
 
       const DblType CM43 =
-        ams_utils::get_M43_constant<DblType, kynema_ugf_ngp::NDimMax>(D, CMdeg);
+        ams_utils::get_M43_constant<DblType, kynema_ugf_ngp::NDimMax>(
+          Dsafe, CMdeg);
 
       const DblType CM43scale = stk::math::max(
         stk::math::min(stk::math::pow(avgResAdeq.get(mi, 0), 2.0), 30.0), 1.0);

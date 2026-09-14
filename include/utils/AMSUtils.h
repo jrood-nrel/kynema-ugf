@@ -31,13 +31,20 @@ get_M43_constant(T D[dim][dim], const double CMdeg)
                   0.034227247973836,  0.001219656091495,  0.000417947294931,
                   0.000421085902741,  0.001223678414510,  0.003695127828465};
 
-  T smallestEV = stk::math::min(D[0][0], stk::math::min(D[1][1], D[2][2]));
-  T largestEV = stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+  const T eigScale = stk::math::max(
+    stk::math::abs(D[0][0]),
+    stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
+  const T eigFloor = stk::math::max(T(1.0e-16), T(1.0e-12) * eigScale);
+  const T d0 = stk::math::max(D[0][0], eigFloor);
+  const T d1 = stk::math::max(D[1][1], eigFloor);
+  const T d2 = stk::math::max(D[2][2], eigFloor);
+
+  T smallestEV = stk::math::min(d0, stk::math::min(d1, d2));
+  T largestEV = stk::math::max(d0, stk::math::max(d1, d2));
   T middleEV = stk::math::if_then_else(
-    D[0][0] == smallestEV, stk::math::min(D[1][1], D[2][2]),
+    d0 == smallestEV, stk::math::min(d1, d2),
     stk::math::if_then_else(
-      D[1][1] == smallestEV, stk::math::min(D[0][0], D[2][2]),
-      stk::math::min(D[0][0], D[1][1])));
+      d1 == smallestEV, stk::math::min(d0, d2), stk::math::min(d0, d1)));
 
   // Scale the EVs
   middleEV = middleEV / smallestEV;
