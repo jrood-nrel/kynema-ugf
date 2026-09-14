@@ -400,6 +400,11 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     {0.0, 0.0, 1.0e-200},
     {0.0, 1.0e-200, 0.0},
   };
+  const double dynamicRangeReal[3][3] = {
+    {1.0, 1.0e-320, 0.0},
+    {0.0, 2.0, 0.0},
+    {0.0, 0.0, 4.0},
+  };
 
   double A[3][3];
   const double(*cases[])[3] = {
@@ -479,6 +484,20 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
     EXPECT_NEAR(eigenvalues[0], -1.0e-200, 1.0e-212);
     EXPECT_NEAR(eigenvalues[1], 0.0, 1.0e-212);
     EXPECT_NEAR(eigenvalues[2], 1.0e-200, 1.0e-212);
+  }
+
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 3; ++j)
+      A[i][j] = dynamicRangeReal[i][j];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A, Q_, D_);
+
+  {
+    double eigenvalues[3] = {D_[0][0], D_[1][1], D_[2][2]};
+    std::sort(std::begin(eigenvalues), std::end(eigenvalues));
+    EXPECT_NEAR(eigenvalues[0], 1.0, 1.0e-12);
+    EXPECT_NEAR(eigenvalues[1], 2.0, 1.0e-12);
+    EXPECT_NEAR(eigenvalues[2], 4.0, 1.0e-12);
   }
 }
 

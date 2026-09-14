@@ -359,8 +359,11 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 
     if ((maxAbs > T(0.0)) &&
         (minAbsNonzero < T(std::numeric_limits<double>::max()))) {
-      const T maxAmp =
-        stk::math::sqrt(T(std::numeric_limits<double>::max()));
+      const T maxCenteredEntry = T(2.0);
+      const T qTermCount = T(6.0);
+      const T maxAmp = stk::math::cbrt(
+        T(std::numeric_limits<double>::max()) /
+        (qTermCount * maxCenteredEntry * maxCenteredEntry * maxCenteredEntry));
       const T logMaxAmp = stk::math::log(maxAmp);
       const T logAmp = T(0.5) *
                        (stk::math::log(maxAbs) - stk::math::log(minAbsNonzero));
