@@ -122,7 +122,9 @@ SSTAMSAveragesAlg::execute()
   const DblType beta_kol_local = beta_kol;
   const DblType aspectRatioSwitch = aspectRatioSwitch_;
   const DblType avgTimeCoeff = avgTimeCoeff_;
-  const DblType minPMbase = std::numeric_limits<DblType>::epsilon();
+  const DblType minPMbase = 1.0e-8;
+  const DblType minSdr = 1.0e-16;
+  const DblType minPMmag = 1.0e-12;
   const auto lengthScaleLimiter = lengthScaleLimiter_;
 
   const bool RANSBelowKs = RANSBelowKs_;
@@ -160,13 +162,11 @@ SSTAMSAveragesAlg::execute()
       const DblType alpha = stk::math::pow(beta.get(mi, 0), 1.7);
 
       // store RANS time scale
+      const DblType sdrSafe = stk::math::max(sdr.get(mi, 0), minSdr);
       if (lengthScaleLimiter) {
-        const DblType l_t = stk::math::sqrt(tke.get(mi, 0)) /
-                            (stk::math::pow(betaStar, .25) * sdr.get(mi, 0));
-        avgTime.get(mi, 0) =
-          avgTimeCoeff * l_t / stk::math::sqrt(tke.get(mi, 0));
+        avgTime.get(mi, 0) = avgTimeCoeff / (stk::math::pow(betaStar, .25) * sdrSafe);
       } else {
-        avgTime.get(mi, 0) = avgTimeCoeff / (betaStar * sdr.get(mi, 0));
+        avgTime.get(mi, 0) = avgTimeCoeff / (betaStar * sdrSafe);
       }
 
       // causal time average ODE: d<phi>/dt = 1/avgTime * (phi - <phi>)
@@ -260,6 +260,19 @@ SSTAMSAveragesAlg::execute()
       // Eigenvalue decomposition of metric tensor
       EigenDecomposition::sym_diagonalize<DblType>(p_Mij, Q, D);
 
+      const DblType eigScaleM = stk::math::max(
+        stk::math::abs(D[0][0]),
+        stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
+      const DblType eigFloorM =
+        ams_utils::positive_eigenvalue_floor(eigScaleM);
+      DblType Dsafe[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
+      for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i) {
+        for (int j = 0; j < kynema_ugf_ngp::NDimMax; ++j) {
+          Dsafe[i][j] = 0.0;
+        }
+        Dsafe[i][i] = stk::math::max(D[i][i], eigFloorM);
+      }
+
       // initialize M43 to 0
       DblType M43[kynema_ugf_ngp::NDimMax][kynema_ugf_ngp::NDimMax];
       for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i)
@@ -269,7 +282,7 @@ SSTAMSAveragesAlg::execute()
       const DblType fourThirds = 4.0 / 3.0;
 
       for (int l = 0; l < kynema_ugf_ngp::NDimMax; l++) {
-        const DblType D43 = stk::math::pow(D[l][l], fourThirds);
+        const DblType D43 = stk::math::pow(Dsafe[l][l], fourThirds);
         for (int i = 0; i < kynema_ugf_ngp::NDimMax; i++) {
           for (int j = 0; j < kynema_ugf_ngp::NDimMax; j++) {
             M43[i][j] += Q[i][l] * Q[j][l] * D43;
@@ -278,9 +291,9 @@ SSTAMSAveragesAlg::execute()
       }
 
       const DblType maxEigM =
-        stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+        stk::math::max(Dsafe[0][0], stk::math::max(Dsafe[1][1], Dsafe[2][2]));
       const DblType minEigM =
-        stk::math::min(D[0][0], stk::math::min(D[1][1], D[2][2]));
+        stk::math::min(Dsafe[0][0], stk::math::min(Dsafe[1][1], Dsafe[2][2]));
 
       const DblType aspectRatio = maxEigM / minEigM;
 
@@ -299,7 +312,8 @@ SSTAMSAveragesAlg::execute()
       }
 
       const DblType CM43 =
-        ams_utils::get_M43_constant<DblType, kynema_ugf_ngp::NDimMax>(D, CMdeg);
+        ams_utils::get_M43_constant<DblType, kynema_ugf_ngp::NDimMax>(
+          Dsafe, CMdeg);
 
       const DblType CM43scale = stk::math::max(
         stk::math::min(stk::math::pow(avgResAdeq.get(mi, 0), 2.0), 30.0), 1.0);
@@ -395,8 +409,8 @@ SSTAMSAveragesAlg::execute()
         const DblType v2 =
           1.0 / v2cMu *
           (tvisc.get(mi, 0) / density.get(mi, 0) / avgTime.get(mi, 0));
-        const DblType PMbase =
-          stk::math::max(1.5 * beta.get(mi, 0) * v2, minPMbase);
+        const DblType PMbase = stk::math::max(
+          1.5 * beta.get(mi, 0) * v2, stk::math::max(minPMbase, 1.0e-4 * v2));
         const DblType PMscale = stk::math::pow(PMbase, -1.5);
 
         for (int i = 0; i < kynema_ugf_ngp::NDimMax; ++i)
@@ -410,24 +424,28 @@ SSTAMSAveragesAlg::execute()
 
         PMmag = stk::math::sqrt(PMmag);
 
-        EigenDecomposition::general_eigenvalues<DblType>(PM, Q, D);
+        if (PMmag < minPMmag) {
+          resAdeq.get(mi, 0) = 1.0;
+        } else {
+          EigenDecomposition::general_eigenvalues<DblType>(PM, Q, D);
 
-        // Take only positive eigenvalues of PM
-        DblType maxPM =
-          stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+          // Take only positive eigenvalues of PM
+          DblType maxPM =
+            stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
 
-        // Update the instantaneous resAdeq field
-        resAdeq.get(mi, 0) =
-          stk::math::max(stk::math::min(maxPM, PMmag), 0.00000001);
+          // Update the instantaneous resAdeq field
+          resAdeq.get(mi, 0) =
+            stk::math::max(stk::math::min(maxPM, PMmag), 0.00000001);
 
-        resAdeq.get(mi, 0) = stk::math::min(resAdeq.get(mi, 0), 30.0);
+          resAdeq.get(mi, 0) = stk::math::min(resAdeq.get(mi, 0), 30.0);
 
-        if (alpha >= 1.0) {
-          resAdeq.get(mi, 0) = stk::math::min(resAdeq.get(mi, 0), 1.0);
+          if (alpha >= 1.0) {
+            resAdeq.get(mi, 0) = stk::math::min(resAdeq.get(mi, 0), 1.0);
+          }
+
+          if (alpha <= beta_kol_local)
+            resAdeq.get(mi, 0) = stk::math::max(resAdeq.get(mi, 0), 1.0);
         }
-
-        if (alpha <= beta_kol_local)
-          resAdeq.get(mi, 0) = stk::math::max(resAdeq.get(mi, 0), 1.0);
       }
 
       avgResAdeq.get(mi, 0) =

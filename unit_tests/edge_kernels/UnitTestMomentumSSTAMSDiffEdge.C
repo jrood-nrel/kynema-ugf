@@ -11,6 +11,8 @@
 #include "UnitTestUtils.h"
 #include "UnitTestHelperObjects.h"
 
+#include <cmath>
+
 #include "edge_kernels/MomentumSSTAMSDiffEdgeKernel.h"
 
 namespace {
@@ -554,4 +556,102 @@ TEST_F(AMSKernelHex8Mesh, NGP_ams_diff)
     helperObjs.linsys->rhs_, gold_values::rhs, 1.0e-12);
   unit_test_kernel_utils::expect_all_near<24>(
     helperObjs.linsys->lhs_, gold_values::lhs, 1.0e-12);
+}
+
+TEST_F(AMSKernelHex8Mesh, NGP_ams_diff_finite_for_singular_metric)
+{
+  if (bulk_->parallel_size() > 1)
+    return;
+
+  fill_mesh_and_init_fields();
+
+  const stk::mesh::Selector sel = meta_->locally_owned_part();
+  for (const auto* ib : bulk_->get_buckets(stk::topology::NODE_RANK, sel)) {
+    for (const auto node : *ib) {
+      double* mij = stk::mesh::field_data(*Mij_, node);
+      for (int i = 0; i < 9; ++i)
+        mij[i] = 0.0;
+      mij[0] = 1.0;
+      mij[4] = 0.0;
+      mij[8] = -1.0e-14;
+    }
+  }
+  Mij_->modify_on_host();
+  Mij_->sync_to_device();
+
+  solnOpts_.meshMotion_ = false;
+  solnOpts_.externalMeshDeformation_ = false;
+  solnOpts_.includeDivU_ = false;
+  solnOpts_.alphaMap_["velocity"] = 0.0;
+  solnOpts_.alphaUpwMap_["velocity"] = 0.0;
+  solnOpts_.upwMap_["velocity"] = 0.0;
+  solnOpts_.initialize_turbulence_constants();
+
+  unit_test_utils::EdgeKernelHelperObjects helperObjs(
+    bulk_, stk::topology::HEX_8, 3, partVec_[0]);
+
+  helperObjs.edgeAlg
+    ->add_kernel<sierra::kynema_ugf::MomentumSSTAMSDiffEdgeKernel>(
+      *bulk_, solnOpts_);
+
+  helperObjs.execute();
+
+  auto rhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->rhs_);
+  auto lhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->lhs_);
+
+  for (unsigned i = 0; i < rhsHost.extent(0); ++i)
+    ASSERT_TRUE(std::isfinite(rhsHost(i)));
+  for (unsigned i = 0; i < lhsHost.extent(0); ++i)
+    for (unsigned j = 0; j < lhsHost.extent(1); ++j)
+      ASSERT_TRUE(std::isfinite(lhsHost(i, j)));
+}
+
+TEST_F(AMSKernelHex8Mesh, NGP_ams_diff_finite_for_subnormal_metric)
+{
+  if (bulk_->parallel_size() > 1)
+    return;
+
+  fill_mesh_and_init_fields();
+
+  const stk::mesh::Selector sel = meta_->locally_owned_part();
+  for (const auto* ib : bulk_->get_buckets(stk::topology::NODE_RANK, sel)) {
+    for (const auto node : *ib) {
+      double* mij = stk::mesh::field_data(*Mij_, node);
+      for (int i = 0; i < 9; ++i)
+        mij[i] = 0.0;
+      mij[0] = 1.0e-320;
+    }
+  }
+  Mij_->modify_on_host();
+  Mij_->sync_to_device();
+
+  solnOpts_.meshMotion_ = false;
+  solnOpts_.externalMeshDeformation_ = false;
+  solnOpts_.includeDivU_ = false;
+  solnOpts_.alphaMap_["velocity"] = 0.0;
+  solnOpts_.alphaUpwMap_["velocity"] = 0.0;
+  solnOpts_.upwMap_["velocity"] = 0.0;
+  solnOpts_.initialize_turbulence_constants();
+
+  unit_test_utils::EdgeKernelHelperObjects helperObjs(
+    bulk_, stk::topology::HEX_8, 3, partVec_[0]);
+
+  helperObjs.edgeAlg
+    ->add_kernel<sierra::kynema_ugf::MomentumSSTAMSDiffEdgeKernel>(
+      *bulk_, solnOpts_);
+
+  helperObjs.execute();
+
+  auto rhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->rhs_);
+  auto lhsHost = Kokkos::create_mirror_view_and_copy(
+    Kokkos::HostSpace(), helperObjs.linsys->lhs_);
+
+  for (unsigned i = 0; i < rhsHost.extent(0); ++i)
+    ASSERT_TRUE(std::isfinite(rhsHost(i)));
+  for (unsigned i = 0; i < lhsHost.extent(0); ++i)
+    for (unsigned j = 0; j < lhsHost.extent(1); ++j)
+      ASSERT_TRUE(std::isfinite(lhsHost(i, j)));
 }
