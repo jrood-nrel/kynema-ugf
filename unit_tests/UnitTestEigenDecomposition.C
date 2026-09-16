@@ -1,3 +1,4 @@
+#include <cmath>
 #include <gtest/gtest.h>
 #include <limits>
 #include <random>
@@ -293,5 +294,53 @@ TEST(TestEigen, testeigendecompandreconstruct2d_simd)
           stk::simd::get_data(A2d_rand_simd[i][j], is), tol);
       }
     }
+  }
+}
+
+TEST(TestEigen, testgeneraleigendecomp3d_repeated_root)
+{
+  constexpr double a = 1.0e-3;
+  double A_[3][3] = {{2.0 * a, 0.0, 0.0}, {0.0, -a, 0.0}, {0.0, 0.0, -a}};
+  double Q_[3][3], D_[3][3];
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A_, Q_, D_);
+
+  const double tol = 1.0e-15;
+  EXPECT_TRUE(std::isfinite(D_[0][0]));
+  EXPECT_TRUE(std::isfinite(D_[1][1]));
+  EXPECT_TRUE(std::isfinite(D_[2][2]));
+  EXPECT_NEAR(D_[0][0], 2.0 * a, tol);
+  EXPECT_NEAR(D_[1][1], -a, tol);
+  EXPECT_NEAR(D_[2][2], -a, tol);
+}
+
+TEST(TestEigen, testgeneraleigendecomp3d_repeated_root_simd)
+{
+  DoubleType A_[3][3], Q_[3][3], D_[3][3];
+
+  for (unsigned is = 0; is < stk::simd::ndoubles; ++is) {
+    const double a = 1.0e-3 * (is + 1);
+    A_[0][0][is] = 2.0 * a;
+    A_[0][1][is] = 0.0;
+    A_[0][2][is] = 0.0;
+    A_[1][0][is] = 0.0;
+    A_[1][1][is] = -a;
+    A_[1][2][is] = 0.0;
+    A_[2][0][is] = 0.0;
+    A_[2][1][is] = 0.0;
+    A_[2][2][is] = -a;
+  }
+
+  sierra::kynema_ugf::EigenDecomposition::general_eigenvalues(A_, Q_, D_);
+
+  const double tol = 1.0e-15;
+  for (unsigned is = 0; is < stk::simd::ndoubles; ++is) {
+    const double a = 1.0e-3 * (is + 1);
+    EXPECT_TRUE(std::isfinite(stk::simd::get_data(D_[0][0], is)));
+    EXPECT_TRUE(std::isfinite(stk::simd::get_data(D_[1][1], is)));
+    EXPECT_TRUE(std::isfinite(stk::simd::get_data(D_[2][2], is)));
+    EXPECT_NEAR(stk::simd::get_data(D_[0][0], is), 2.0 * a, tol);
+    EXPECT_NEAR(stk::simd::get_data(D_[1][1], is), -a, tol);
+    EXPECT_NEAR(stk::simd::get_data(D_[2][2], is), -a, tol);
   }
 }

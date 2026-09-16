@@ -370,26 +370,18 @@ general_eigenvalues(T (&A)[3][3], T (&Q)[3][3], T (&D)[3][3])
 
   // Solve roots of depressed cubic polynomial analytically (Francois Viete
   // formula)
-  const T t1 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-      3.0);
-  const T t2 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-        3.0 -
-      2.0 * pi / 3.0);
-  const T t3 =
-    2.0 * stk::math::sqrt(-linCoef / 3.0) *
-    stk::math::cos(
-      stk::math::acos(
-        3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef)) /
-        3.0 -
-      4.0 * pi / 3.0);
+  // The acos argument is analytically in [-1, 1] for real-rooted matrices, and
+  // equals exactly +/-1 when a repeated eigenvalue is present. Clamp to recover
+  // that exact value when roundoff nudges the computed argument slightly
+  // outside the domain of acos.
+  const T acosArgRaw =
+    3.0 * constCoef * stk::math::sqrt(-3.0 / linCoef) / (2.0 * linCoef);
+  const T acosArg = stk::math::max(T(-1.0), stk::math::min(T(1.0), acosArgRaw));
+  const T phi = stk::math::acos(acosArg) / 3.0;
+  const T amp = 2.0 * stk::math::sqrt(-linCoef / 3.0);
+  const T t1 = amp * stk::math::cos(phi);
+  const T t2 = amp * stk::math::cos(phi - 2.0 * pi / 3.0);
+  const T t3 = amp * stk::math::cos(phi - 4.0 * pi / 3.0);
 
   // Convert roots of depressed polynomial back to the eigenvalues
   D[0][0] = t1 + trA / 3.0;
