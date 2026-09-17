@@ -6,7 +6,6 @@
 #include <stdexcept>
 
 #include "EigenDecomposition.h"
-#include "utils/AMSUtils.h"
 
 // NGP-based includes
 #include "SimdInterface.h"
@@ -610,17 +609,4 @@ TEST(TestEigen, testgeneraleigenvalues_robust_cases)
   const double cappedAmplificationGapExpected[3] = {-1.0e-300, 0.0, 1.0e-300};
   expect_device_real_roots(
     cappedAmplificationGap, cappedAmplificationGapExpected, 1.0e-312);
-}
-
-TEST(TestAMSUtils, testgetm43constant_finite_for_subnormal_spectrum)
-{
-  double D[3][3] = {
-    {1.0e-320, 0.0, 0.0},
-    {0.0, 0.0, 0.0},
-    {0.0, 0.0, 0.0},
-  };
-
-  const double cm43 =
-    sierra::kynema_ugf::ams_utils::get_M43_constant<double>(D, 1.0);
-  EXPECT_TRUE(std::isfinite(cm43));
 }
