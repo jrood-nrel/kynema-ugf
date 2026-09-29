@@ -22,7 +22,7 @@ macro(setup_test testname np)
   set(OUTPUT_FILE "${testname}.log")
   set(OUTPUT_FILE_RST "${testname}_rst.log")
   set(OUTPUT_FILE_R0 "${testname}_R0.log")
-  set(OUTPUT_FILE_R1 "${testname}_R0.log")
+  set(OUTPUT_FILE_R1 "${testname}_R1.log")
   set(OUTPUT_FILE_NP "${testname}Np${np}.log")
   set(RUN_COMMAND "${MPI_COMMAND} -i ${INPUT_FILE} -o ${OUTPUT_FILE} 2>&1 && cat ${OUTPUT_FILE}")
   set(RUN_COMMAND_RST "${MPI_COMMAND} -i ${INPUT_FILE_RST} -o ${OUTPUT_FILE_RST}")
@@ -270,7 +270,7 @@ if(NOT ENABLE_CUDA AND NOT ENABLE_ROCM)
   # Convergence tests
   #=============================================================================
   if(ENABLE_TRILINOS_SOLVERS)
-    add_test_v2(BoussinesqNonIso 8 24135.8)
+    add_test_v2(BoussinesqNonIso 8 15135.8)
   endif()
 
   #=============================================================================
