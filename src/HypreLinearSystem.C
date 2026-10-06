@@ -1603,6 +1603,8 @@ HypreLinearSystem::hypreIJMatrixSetAddToValues()
       HYPRE_IJMatrixSetValues2(
         mat_, count, nullptr, rows.data(), nullptr, columns.data(),
         coefficients.data());
+    // Keep buffers alive until hypre's asynchronous HIP copies finish.
+    Kokkos::fence();
     return;
   }
 
@@ -1743,6 +1745,8 @@ HypreLinearSystem::hypreIJVectorSetDeterministicValues(
   Kokkos::deep_copy(coefficients, hostValues);
   if (count)
     HYPRE_IJVectorSetValues(rhs, count, rows.data(), coefficients.data());
+  // Keep buffers alive until hypre's asynchronous HIP copies finish.
+  Kokkos::fence();
 }
 
 void
