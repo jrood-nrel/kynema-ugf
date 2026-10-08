@@ -17,6 +17,16 @@ namespace kynema_ugf {
 
 namespace ams_utils {
 
+template <class T>
+KOKKOS_FUNCTION T
+positive_eigenvalue_floor(const T eigScale)
+{
+  const T relativeFloor = T(1.0e-12) * eigScale;
+  const T nonzeroFloor = stk::math::if_then_else(
+    relativeFloor > T(0.0), relativeFloor, eigScale);
+  return stk::math::if_then_else(eigScale > T(0.0), nonzeroFloor, T(1.0e-16));
+}
+
 template <class T, int dim = 3>
 KOKKOS_FUNCTION T
 get_M43_constant(T D[dim][dim], const double CMdeg)
@@ -31,24 +41,32 @@ get_M43_constant(T D[dim][dim], const double CMdeg)
                   0.034227247973836,  0.001219656091495,  0.000417947294931,
                   0.000421085902741,  0.001223678414510,  0.003695127828465};
 
-  T smallestEV = stk::math::min(D[0][0], stk::math::min(D[1][1], D[2][2]));
-  T largestEV = stk::math::max(D[0][0], stk::math::max(D[1][1], D[2][2]));
+  const T eigScale = stk::math::max(
+    stk::math::abs(D[0][0]),
+    stk::math::max(stk::math::abs(D[1][1]), stk::math::abs(D[2][2])));
+  const T eigFloor = positive_eigenvalue_floor(eigScale);
+  const T d0 = stk::math::max(D[0][0], eigFloor);
+  const T d1 = stk::math::max(D[1][1], eigFloor);
+  const T d2 = stk::math::max(D[2][2], eigFloor);
+
+  T smallestEV = stk::math::min(d0, stk::math::min(d1, d2));
+  T largestEV = stk::math::max(d0, stk::math::max(d1, d2));
   T middleEV = stk::math::if_then_else(
-    D[0][0] == smallestEV, stk::math::min(D[1][1], D[2][2]),
+    d0 == smallestEV, stk::math::min(d1, d2),
     stk::math::if_then_else(
-      D[1][1] == smallestEV, stk::math::min(D[0][0], D[2][2]),
-      stk::math::min(D[0][0], D[1][1])));
+      d1 == smallestEV, stk::math::min(d0, d2), stk::math::min(d0, d1)));
 
   // Scale the EVs
   middleEV = middleEV / smallestEV;
   largestEV = largestEV / smallestEV;
 
-  T r =
-    stk::math::sqrt(stk::math::pow(middleEV, 2) + stk::math::pow(largestEV, 2));
-  T theta = stk::math::acos(largestEV / r);
+  const T middleSq = middleEV * middleEV;
+  const T largestSq = largestEV * largestEV;
+  const T r = stk::math::sqrt(middleSq + largestSq);
+  const T sinTwoTheta = (T(2.0) * middleEV * largestEV) / (middleSq + largestSq);
 
   T x = stk::math::log(r);
-  T y = stk::math::log(stk::math::sin(2.0 * theta));
+  T y = stk::math::log(sinTwoTheta);
 
   T poly = c[0] + c[1] * x + c[2] * y + c[3] * x * x + c[4] * x * y +
            c[5] * y * y + c[6] * x * x * x + c[7] * x * x * y +
